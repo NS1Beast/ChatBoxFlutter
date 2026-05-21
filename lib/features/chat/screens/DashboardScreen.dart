@@ -1,10 +1,12 @@
+// ignore_file: file_names
 import 'package:flutter/material.dart';
 import '../widgets/ChatNavigationRail.dart';
 import '../widgets/ChatListPanel.dart';
 import '../widgets/MainChatArea.dart';
-// Import thêm file Settings bạn vừa tạo
 import '../../settings/SettingsScreen.dart'; 
-
+import '../../contacts/ContactsScreen.dart';
+import '../../timeline/TimelineScreen.dart';
+import '../../notifications/NotificationsScreen.dart';
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -48,32 +50,57 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 );
               },
-              // Logic chuyển đổi nội dung:
-              // - Nếu chọn Index 3 (Cài đặt): Hiển thị toàn màn hình Settings
-              // - Nếu chọn các Index khác: Hiển thị giao diện Chat (List + Area)
-              child: _selectedIndex == 3
-                  ? const SettingsScreen(key: ValueKey('Settings'))
-                  : Row(
-                      key: const ValueKey('ChatContent'),
-                      children: [
-                        // Danh sách Chat
-                        Container(
-                          width: 320,
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.surface,
-                            border: Border(
-                              right: BorderSide(color: Colors.grey.withValues(alpha: 0.2), width: 1),
+              
+              // Sử dụng switch case để điều hướng các màn hình rõ ràng
+              child: Builder(
+                key: ValueKey(_selectedIndex),
+                builder: (context) {
+                  switch (_selectedIndex) {
+                    case 0: // Màn hình Chat chính
+                      return Row(
+                        children: [
+                          Container(
+                            width: 320,
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.surface,
+                              border: Border(
+                                right: BorderSide(
+                                  color: Colors.grey.withValues(alpha: 0.2), 
+                                  width: 1
+                                ),
+                              ),
                             ),
+                            child: const ChatListPanel(), 
                           ),
-                          child: const ChatListPanel(),
-                        ),
-                        
-                        // Khu vực Chat chính
-                        const Expanded(
-                          child: MainChatArea(),
-                        ),
-                      ],
-                    ),
+                          const Expanded(child: MainChatArea()), 
+                        ],
+                      );
+
+                    case 1: // Màn hình BẠN BÈ VÀ NHÓM
+                      return const ContactsScreen();
+
+                    case 2: // Màn hình BÀI VIẾT
+                      return const TimelineScreen();
+
+                    case 3:
+                      return const NotificationsScreen();
+
+                    case 4: // Màn hình CÀI ĐẶT
+                      return const SettingsScreen();
+
+                    default: // Các màn hình chưa phát triển (VD: Gọi điện - index 2)
+                      return Center(
+                        child: Text(
+                          'Tính năng đang phát triển',
+                          style: TextStyle(
+                            fontSize: 18, 
+                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)
+                          ),
+                        )
+                      );
+                  }
+                },
+              ),
             ),
           ),
         ],

@@ -25,12 +25,12 @@ class ChatNavigationRail extends StatelessWidget {
           // Các nút điều hướng
           _buildNavItem(Icons.chat_bubble_rounded, Icons.chat_bubble_outline, 0),
           _buildNavItem(Icons.people_alt_rounded, Icons.people_outline, 1),
-          _buildNavItem(Icons.phone_rounded, Icons.phone_outlined, 2),
-          
+          _buildNavItem(Icons.newspaper_rounded, Icons.newspaper_outlined, 2),
+          _buildNavItem(Icons.inbox_rounded, Icons.inbox_outlined, 3),
           const Spacer(),
           
           // Nút Cài đặt
-          _buildNavItem(Icons.settings_rounded, Icons.settings_outlined, 3),
+          _buildNavItem(Icons.settings_rounded, Icons.settings_outlined, 4),
           const SizedBox(height: 16),
           
           // Avatar của bạn (Góc dưới cùng)
