@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../chat/screens/DashboardScreen.dart';
 import 'AuthController.dart'; // Import Backend
-
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 

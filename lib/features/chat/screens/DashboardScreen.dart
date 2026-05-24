@@ -7,6 +7,7 @@ import '../../settings/SettingsScreen.dart';
 import '../../contacts/ContactsScreen.dart';
 import '../../timeline/TimelineScreen.dart';
 import '../../notifications/NotificationsScreen.dart';
+
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -21,7 +22,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+      // Đã loại bỏ Column và CustomTitleBar, dùng trực tiếp Row làm body chính
       body: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // 1. Navigation (Sidebar màu tím)
           ChatNavigationRail(
@@ -38,7 +41,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 400),
               transitionBuilder: (Widget child, Animation<double> animation) {
-                // Hiệu ứng mờ dần và trượt nhẹ khi chuyển tab
                 return FadeTransition(
                   opacity: animation,
                   child: SlideTransition(
@@ -51,13 +53,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 );
               },
               
-              // Sử dụng switch case để điều hướng các màn hình rõ ràng
               child: Builder(
                 key: ValueKey(_selectedIndex),
                 builder: (context) {
                   switch (_selectedIndex) {
-                    case 0: // Màn hình Chat chính
+                    case 0:
                       return Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch, 
                         children: [
                           Container(
                             width: 320,
@@ -67,7 +69,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 right: BorderSide(
                                   color: Colors.grey.withValues(alpha: 0.2), 
                                   width: 1
-                                ),
+                                )
                               ),
                             ),
                             child: const ChatListPanel(), 
@@ -76,19 +78,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ],
                       );
 
-                    case 1: // Màn hình BẠN BÈ VÀ NHÓM
-                      return const ContactsScreen();
+                    case 1: return const ContactsScreen();
+                    case 2: return const TimelineScreen();
+                    case 3: return const NotificationsScreen();
+                    case 4: return const SettingsScreen();
 
-                    case 2: // Màn hình BÀI VIẾT
-                      return const TimelineScreen();
-
-                    case 3:
-                      return const NotificationsScreen();
-
-                    case 4: // Màn hình CÀI ĐẶT
-                      return const SettingsScreen();
-
-                    default: // Các màn hình chưa phát triển (VD: Gọi điện - index 2)
+                    default:
                       return Center(
                         child: Text(
                           'Tính năng đang phát triển',
