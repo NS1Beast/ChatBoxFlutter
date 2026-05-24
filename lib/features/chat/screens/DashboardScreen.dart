@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../widgets/ChatNavigationRail.dart';
 import '../widgets/ChatListPanel.dart';
 import '../widgets/MainChatArea.dart';
+import '../widgets/WelcomeScreen.dart';
 import '../../settings/SettingsScreen.dart'; 
 import '../../contacts/ContactsScreen.dart';
 import '../../timeline/TimelineScreen.dart';
@@ -17,12 +18,14 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
+  
+  // BIẾN LƯU TRẠNG THÁI: ID của người đang được chat (null = chưa chọn ai)
+  String? _activeChatId;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-      // Đã loại bỏ Column và CustomTitleBar, dùng trực tiếp Row làm body chính
       body: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -36,7 +39,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             },
           ),
           
-          // 2. Khu vực nội dung chính (Thay đổi dựa theo index)
+          // 2. Khu vực nội dung chính
           Expanded(
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 400),
@@ -44,10 +47,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 return FadeTransition(
                   opacity: animation,
                   child: SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(0.0, 0.05),
-                      end: Offset.zero,
-                    ).animate(animation),
+                    position: Tween<Offset>(begin: const Offset(0.0, 0.05), end: Offset.zero).animate(animation),
                     child: child,
                   ),
                 );
@@ -65,16 +65,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             width: 320,
                             decoration: BoxDecoration(
                               color: Theme.of(context).colorScheme.surface,
-                              border: Border(
-                                right: BorderSide(
-                                  color: Colors.grey.withValues(alpha: 0.2), 
-                                  width: 1
-                                )
-                              ),
+                              border: Border(right: BorderSide(color: Colors.grey.withValues(alpha: 0.2), width: 1)),
                             ),
-                            child: const ChatListPanel(), 
+                            // Hứng sự kiện click từ danh sách
+                            child: ChatListPanel(
+                              onChatSelected: (chatId) {
+                                setState(() {
+                                  _activeChatId = chatId; // Cập nhật ID để tắt màn hình Welcome
+                                });
+                              },
+                            ), 
                           ),
-                          const Expanded(child: MainChatArea()), 
+                          
+                          // Điều kiện hiển thị thông minh: Có ID thì mở Chat, Không có thì mở Welcome
+                          Expanded(
+                            child: _activeChatId != null 
+                                ? const MainChatArea() // (Sau này ông có thể truyền _activeChatId vào MainChatArea(id: _activeChatId) để load đúng tin nhắn)
+                                : const WelcomeScreen(), 
+                          ), 
                         ],
                       );
 
@@ -87,10 +95,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       return Center(
                         child: Text(
                           'Tính năng đang phát triển',
-                          style: TextStyle(
-                            fontSize: 18, 
-                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)
-                          ),
+                          style: TextStyle(fontSize: 18, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
                         )
                       );
                   }
