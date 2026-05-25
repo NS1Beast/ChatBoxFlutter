@@ -11,7 +11,6 @@ class ContactsScreen extends StatefulWidget {
 
 class _ContactsScreenState extends State<ContactsScreen> {
   final ContactsController _controller = ContactsController();
-  // Thêm Controller cho thanh cuộn Desktop
   final ScrollController _scrollController = ScrollController();
 
   @override
@@ -110,16 +109,14 @@ class _ContactsScreenState extends State<ContactsScreen> {
               ),
 
               // ==========================================
-              // CỘT PHẢI: CHI TIẾT LIÊN HỆ
+              // CỘT PHẢI: CHI TIẾT LIÊN HỆ CẢI TIẾN
               // ==========================================
               Expanded(
                 child: Container(
                   color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.1),
-                  child: Center(
-                    child: _controller.currentTab == 0
-                        ? _buildFriendDetails(textColor, primaryColor, surfaceColor)
-                        : _buildGroupDetails(textColor, primaryColor, surfaceColor),
-                  ),
+                  child: _controller.currentTab == 0
+                      ? _buildFriendDetails(textColor, primaryColor, surfaceColor)
+                      : _buildGroupDetails(textColor, primaryColor, surfaceColor),
                 ),
               ),
             ],
@@ -129,7 +126,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
     );
   }
 
-  // --- COMPONENT HỖ TRỢ ---
+  // --- CÁC HÀM XÂY DỰNG CỘT TRÁI ---
 
   Widget _buildTabButton(String title, int index, Color primaryColor, Color textColor) {
     bool isSelected = _controller.currentTab == index;
@@ -166,12 +163,12 @@ class _ContactsScreenState extends State<ContactsScreen> {
         final isSelected = _controller.selectedFriend?.id == friend.id;
         
         return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2), // Bo gọn 2 bên lề
+          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2), 
           child: ListTile(
             selected: isSelected,
             selectedTileColor: primaryColor.withValues(alpha: 0.1),
-            hoverColor: textColor.withValues(alpha: 0.05), // Đổi màu khi hover
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), // Bo góc đẹp mắt
+            hoverColor: textColor.withValues(alpha: 0.05),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), 
             leading: Stack(
               children: [
                 CircleAvatar(backgroundImage: NetworkImage(friend.avatarUrl)),
@@ -228,95 +225,244 @@ class _ContactsScreenState extends State<ContactsScreen> {
     );
   }
 
-  // Giao diện bên phải khi chọn Bạn bè
+  // ==========================================
+  // CÁC HÀM XÂY DỰNG CỘT PHẢI (CHI TIẾT)
+  // ==========================================
+
   Widget _buildFriendDetails(Color textColor, Color primaryColor, Color surfaceColor) {
     final friend = _controller.selectedFriend;
     if (friend == null) {
-      return Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.person_search_rounded, size: 80, color: textColor.withValues(alpha: 0.2)),
-          const SizedBox(height: 16),
-          Text('Chọn một người bạn để xem chi tiết', style: TextStyle(color: textColor.withValues(alpha: 0.5))),
-        ],
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.person_search_rounded, size: 80, color: textColor.withValues(alpha: 0.2)),
+            const SizedBox(height: 16),
+            Text('Chọn một người bạn để xem chi tiết', style: TextStyle(color: textColor.withValues(alpha: 0.5))),
+          ],
+        ),
       );
     }
 
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        CircleAvatar(radius: 60, backgroundImage: NetworkImage(friend.avatarUrl)),
-        const SizedBox(height: 24),
-        Text(friend.name, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold, color: textColor)),
-        const SizedBox(height: 8),
-        Text(friend.phone, style: TextStyle(color: textColor.withValues(alpha: 0.6), fontSize: 16)),
-        const SizedBox(height: 8),
-        Text(friend.bio, style: TextStyle(color: primaryColor, fontSize: 15, fontStyle: FontStyle.italic)),
-        const SizedBox(height: 32),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _HoverableActionCard(icon: Icons.chat_bubble_rounded, label: 'Nhắn tin', primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor, onTap: (){}),
-            const SizedBox(width: 16),
-            _HoverableActionCard(icon: Icons.call_rounded, label: 'Gọi điện', primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor, onTap: (){}),
-            const SizedBox(width: 16),
-            _HoverableActionCard(icon: Icons.videocam_rounded, label: 'Video', primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor, onTap: (){}),
-          ],
-        )
-      ],
+    // Giao diện chi tiết người dùng
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(40),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 600),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // 1. Header (Avatar + Tên)
+              CircleAvatar(radius: 60, backgroundImage: NetworkImage(friend.avatarUrl)),
+              const SizedBox(height: 24),
+              Text(friend.name, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold, color: textColor)),
+              const SizedBox(height: 8),
+              Text(friend.bio, style: TextStyle(color: primaryColor, fontSize: 15, fontStyle: FontStyle.italic)),
+              const SizedBox(height: 32),
+              
+              // 2. Action Buttons
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _HoverableActionCard(icon: Icons.chat_bubble_rounded, label: 'Nhắn tin', primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor, onTap: (){}),
+                  const SizedBox(width: 16),
+                  _HoverableActionCard(icon: Icons.call_rounded, label: 'Gọi thoại', primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor, onTap: (){}),
+                  const SizedBox(width: 16),
+                  _HoverableActionCard(icon: Icons.videocam_rounded, label: 'Gọi video', primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor, onTap: (){}),
+                ],
+              ),
+              const SizedBox(height: 40),
+
+              // 3. Thông tin cá nhân (Card)
+              _buildInfoSectionHeader('Thông tin cá nhân', textColor),
+              Container(
+                decoration: BoxDecoration(color: surfaceColor, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))]),
+                child: Column(
+                  children: [
+                    _buildInfoTile(Icons.phone_rounded, 'Số điện thoại', friend.phone, textColor, primaryColor),
+                    const Divider(height: 1, indent: 56, endIndent: 16),
+                    _buildInfoTile(Icons.cake_rounded, 'Ngày sinh', '15 tháng 8, 1999', textColor, primaryColor),
+                    const Divider(height: 1, indent: 56, endIndent: 16),
+                    _buildInfoTile(Icons.transgender_rounded, 'Giới tính', 'Nữ', textColor, primaryColor),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 32),
+
+              // 4. Ảnh chung (Media)
+              _buildInfoSectionHeader('Ảnh & Video chung', textColor),
+              Container(
+                height: 100,
+                width: double.infinity,
+                decoration: BoxDecoration(color: surfaceColor, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))]),
+                padding: const EdgeInsets.all(12),
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: 6,
+                  itemBuilder: (context, index) => Container(
+                    width: 76,
+                    margin: const EdgeInsets.only(right: 8),
+                    decoration: BoxDecoration(borderRadius: BorderRadius.circular(8), image: DecorationImage(image: NetworkImage('https://picsum.photos/seed/${index + 50}/200'), fit: BoxFit.cover)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 32),
+
+              // 5. Vùng Nguy hiểm (Chặn, Xóa)
+              _buildInfoSectionHeader('Tùy chọn', textColor),
+              Container(
+                decoration: BoxDecoration(color: surfaceColor, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))]),
+                child: Column(
+                  children: [
+                    _buildActionTile(Icons.block_rounded, 'Chặn người dùng', Colors.orange),
+                    const Divider(height: 1, indent: 56, endIndent: 16),
+                    _buildActionTile(Icons.person_remove_rounded, 'Xóa khỏi danh bạ', Colors.redAccent),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 40),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
-  // Giao diện bên phải khi chọn Nhóm
   Widget _buildGroupDetails(Color textColor, Color primaryColor, Color surfaceColor) {
     final group = _controller.selectedGroup;
     if (group == null) {
-      return Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.group_outlined, size: 80, color: textColor.withValues(alpha: 0.2)),
-          const SizedBox(height: 16),
-          Text('Chọn một nhóm để xem chi tiết', style: TextStyle(color: textColor.withValues(alpha: 0.5))),
-        ],
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.group_outlined, size: 80, color: textColor.withValues(alpha: 0.2)),
+            const SizedBox(height: 16),
+            Text('Chọn một nhóm để xem chi tiết', style: TextStyle(color: textColor.withValues(alpha: 0.5))),
+          ],
+        ),
       );
     }
 
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Container(
-          width: 120, height: 120,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(30),
-            image: DecorationImage(image: NetworkImage(group.avatarUrl), fit: BoxFit.cover),
-            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10)],
+    // Giao diện chi tiết Nhóm
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(40),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 600),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // 1. Header (Avatar + Tên)
+              Container(
+                width: 120, height: 120,
+                decoration: BoxDecoration(borderRadius: BorderRadius.circular(30), image: DecorationImage(image: NetworkImage(group.avatarUrl), fit: BoxFit.cover), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10)]),
+              ),
+              const SizedBox(height: 24),
+              Text(group.name, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold, color: textColor)),
+              const SizedBox(height: 8),
+              Text(group.description, textAlign: TextAlign.center, style: TextStyle(color: textColor.withValues(alpha: 0.6), fontSize: 15)),
+              const SizedBox(height: 32),
+              
+              // 2. Action Buttons
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _HoverableActionCard(icon: Icons.forum_rounded, label: 'Vào Chat', primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor, onTap: (){}),
+                  const SizedBox(width: 16),
+                  _HoverableActionCard(icon: Icons.videocam_rounded, label: 'Gọi Nhóm', primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor, onTap: (){}),
+                  const SizedBox(width: 16),
+                  _HoverableActionCard(icon: Icons.settings_rounded, label: 'Quản lý', primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor, onTap: (){}),
+                ],
+              ),
+              const SizedBox(height: 40),
+
+              // 3. Danh sách thành viên thu gọn
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _buildInfoSectionHeader('Thành viên (${group.memberCount})', textColor),
+                  TextButton(
+                          onPressed: () {},
+                          child: const Text('Xem tất cả'),
+                        ),
+                ],
+              ),
+              Container(
+                decoration: BoxDecoration(color: surfaceColor, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))]),
+                child: Column(
+                  children: List.generate(3, (index) => Column(
+                    children: [
+                      ListTile(
+                        leading: CircleAvatar(backgroundImage: NetworkImage('https://i.pravatar.cc/150?img=${index + 12}')),
+                        title: Text('Thành viên ${index + 1}', style: TextStyle(color: textColor, fontWeight: FontWeight.w600)),
+                        subtitle: index == 0 ? Text('Quản trị viên', style: TextStyle(color: primaryColor, fontSize: 12)) : null,
+                      ),
+                      if (index < 2) const Divider(height: 1, indent: 70, endIndent: 16),
+                    ],
+                  )),
+                ),
+              ),
+              const SizedBox(height: 32),
+
+              // 4. Tùy chọn Nhóm
+              _buildInfoSectionHeader('Tùy chọn', textColor),
+              Container(
+                decoration: BoxDecoration(color: surfaceColor, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))]),
+                child: Column(
+                  children: [
+                    _buildActionTile(Icons.notifications_off_rounded, 'Tắt thông báo nhóm', Colors.orange),
+                    const Divider(height: 1, indent: 56, endIndent: 16),
+                    _buildActionTile(Icons.exit_to_app_rounded, 'Rời khỏi nhóm', Colors.redAccent),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 40),
+            ],
           ),
         ),
-        const SizedBox(height: 24),
-        Text(group.name, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold, color: textColor)),
-        const SizedBox(height: 8),
-        Text('${group.memberCount} thành viên', style: TextStyle(color: textColor.withValues(alpha: 0.6), fontSize: 16)),
-        const SizedBox(height: 8),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 40),
-          child: Text(group.description, textAlign: TextAlign.center, style: TextStyle(color: primaryColor, fontSize: 15)),
-        ),
-        const SizedBox(height: 32),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _HoverableActionCard(icon: Icons.forum_rounded, label: 'Vào Chat', primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor, onTap: (){}),
-            const SizedBox(width: 16),
-            _HoverableActionCard(icon: Icons.settings_rounded, label: 'Quản lý', primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor, onTap: (){}),
-          ],
-        )
-      ],
+      ),
+    );
+  }
+
+  // --- COMPONENT NHỎ BÊN PHẢI ---
+  Widget _buildInfoSectionHeader(String title, Color textColor) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12, left: 8),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(title.toUpperCase(), style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: textColor.withValues(alpha: 0.5), letterSpacing: 1.2)),
+      ),
+    );
+  }
+
+  Widget _buildInfoTile(IconData icon, String title, String subtitle, Color textColor, Color primaryColor) {
+    return ListTile(
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(color: primaryColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+        child: Icon(icon, color: primaryColor, size: 20),
+      ),
+      title: Text(title, style: TextStyle(fontSize: 13, color: textColor.withValues(alpha: 0.5))),
+      subtitle: Text(subtitle, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: textColor)),
+    );
+  }
+
+  Widget _buildActionTile(IconData icon, String title, Color color) {
+    return ListTile(
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+        child: Icon(icon, color: color, size: 20),
+      ),
+      title: Text(title, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: color)),
+      onTap: () {},
     );
   }
 }
 
 // ==========================================
-// WIDGET CON: Thẻ nút bấm thao tác có hiệu ứng Hover
+// WIDGET CON: Thẻ nút bấm thao tác
 // ==========================================
 class _HoverableActionCard extends StatefulWidget {
   final IconData icon;
@@ -353,13 +499,7 @@ class _HoverableActionCardState extends State<_HoverableActionCard> {
           decoration: BoxDecoration(
             color: _isHovered ? widget.primaryColor.withValues(alpha: 0.1) : widget.surfaceColor,
             borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: _isHovered ? 0.08 : 0.03), 
-                blurRadius: _isHovered ? 15 : 10, 
-                offset: const Offset(0, 4)
-              )
-            ],
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: _isHovered ? 0.08 : 0.03), blurRadius: _isHovered ? 15 : 10, offset: const Offset(0, 4))],
           ),
           child: Column(
             children: [

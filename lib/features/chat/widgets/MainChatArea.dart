@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
+import 'dart:math';
 import '../../profile/FriendProfileScreen.dart';
 import '../../call/CallScreen.dart';
 import 'FullScreenImageViewer.dart';
@@ -23,10 +25,16 @@ class MainChatArea extends StatefulWidget {
 class _MainChatAreaState extends State<MainChatArea> {
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _msgController = TextEditingController();
+  
+  bool _showInfoPanel = false;
   bool _isTyping = false;
   
-  // BIẾN TRẠNG THÁI: Đóng/Mở bảng thông tin bên phải
-  bool _showInfoPanel = false;
+  // ==========================================
+  // BIẾN TRẠNG THÁI GHI ÂM
+  // ==========================================
+  bool _isRecording = false;
+  int _recordDuration = 0; // Tính bằng giây
+  Timer? _timer;
 
   final List<ChatMessage> messages = [
     ChatMessage(text: 'Chào bạn, dự án dạo này sao rồi?', isMe: false, time: '10:30 AM'),
@@ -40,10 +48,10 @@ class _MainChatAreaState extends State<MainChatArea> {
   void dispose() {
     _scrollController.dispose();
     _msgController.dispose();
+    _timer?.cancel();
     super.dispose();
   }
 
-  // HÀM MỞ MÀN HÌNH FRIEND PROFILE (TOÀN MÀN HÌNH)
   void _openUserProfile() {
     Navigator.push(
       context,
@@ -52,10 +60,46 @@ class _MainChatAreaState extends State<MainChatArea> {
           userName: 'Trần Thị B',
           avatarUrl: 'https://i.pravatar.cc/150?img=20',
           bio: 'Yêu màu hồng, ghét sự giả dối 🌸',
-          initialIsFriend: true, // Nếu truyền false sẽ hiện nút "Thêm bạn bè" màu xanh
+          initialIsFriend: true,
         ),
       ),
     );
+  }
+
+  // --- HÀM XỬ LÝ GHI ÂM ---
+  void _startRecording() {
+    setState(() {
+      _isRecording = true;
+      _recordDuration = 0;
+    });
+    // Đếm giờ mỗi giây
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      setState(() {
+        _recordDuration++;
+      });
+    });
+  }
+
+  void _stopRecording({required bool send}) {
+    _timer?.cancel();
+    setState(() {
+      _isRecording = false;
+      _recordDuration = 0;
+    });
+    
+    if (send) {
+      // Giả lập gửi tin nhắn thoại (Hiện tại chỉ show Toast)
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Đã gửi tin nhắn thoại!'), behavior: SnackBarBehavior.floating),
+      );
+    }
+  }
+
+  // Format số giây thành chuỗi 00:00
+  String _formatDuration(int seconds) {
+    final min = (seconds ~/ 60).toString().padLeft(2, '0');
+    final sec = (seconds % 60).toString().padLeft(2, '0');
+    return '$min:$sec';
   }
 
   @override
@@ -76,7 +120,7 @@ class _MainChatAreaState extends State<MainChatArea> {
           Expanded(
             child: Column(
               children: [
-                // 1. HEADER
+                // 1. HEADER (Giữ nguyên như cũ)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                   decoration: BoxDecoration(
@@ -85,7 +129,6 @@ class _MainChatAreaState extends State<MainChatArea> {
                   ),
                   child: Row(
                     children: [
-                      // SỰ KIỆN CLICK VÀO AVATAR ĐỂ MỞ PROFILE
                       MouseRegion(
                         cursor: SystemMouseCursors.click,
                         child: GestureDetector(
@@ -93,16 +136,7 @@ class _MainChatAreaState extends State<MainChatArea> {
                           child: Stack(
                             children: [
                               const CircleAvatar(radius: 22, backgroundImage: NetworkImage('https://i.pravatar.cc/150?img=20')),
-                              Positioned(
-                                right: 0, bottom: 0,
-                                child: Container(
-                                  width: 12, height: 12,
-                                  decoration: BoxDecoration(
-                                    color: Colors.green, shape: BoxShape.circle,
-                                    border: Border.all(color: surfaceColor, width: 2),
-                                  ),
-                                ),
-                              ),
+                              Positioned(right: 0, bottom: 0, child: Container(width: 12, height: 12, decoration: BoxDecoration(color: Colors.green, shape: BoxShape.circle, border: Border.all(color: surfaceColor, width: 2)))),
                             ],
                           ),
                         ),
@@ -114,55 +148,22 @@ class _MainChatAreaState extends State<MainChatArea> {
                           children: [
                             MouseRegion(
                               cursor: SystemMouseCursors.click,
-                              child: GestureDetector(
-                                onTap: _openUserProfile,
-                                child: Text('Trần Thị B', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)),
-                              ),
+                              child: GestureDetector(onTap: _openUserProfile, child: Text('Trần Thị B', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor))),
                             ),
                             Text('Đang hoạt động', style: TextStyle(fontSize: 13, color: primaryColor)),
                           ],
                         ),
                       ),
-                      // Nút Gọi Thoại
                       IconButton(
                         icon: Icon(Icons.call_outlined, color: primaryColor), 
-                        onPressed: () {
-                          Navigator.push(
-                            context, 
-                            PageRouteBuilder(
-                              opaque: false, 
-                              pageBuilder: (_, __, ___) => const CallScreen(
-                                isVideoCall: false,
-                                userName: 'Trần Thị B',
-                                avatarUrl: 'https://i.pravatar.cc/150?img=20',
-                              ),
-                            ),
-                          );
-                        }
+                        onPressed: () => Navigator.push(context, PageRouteBuilder(opaque: false, pageBuilder: (_, __, ___) => const CallScreen(isVideoCall: false, userName: 'Trần Thị B', avatarUrl: 'https://i.pravatar.cc/150?img=20')))
                       ),
-                      // Nút Video Call
                       IconButton(
                         icon: Icon(Icons.videocam_outlined, color: primaryColor), 
-                        onPressed: () {
-                          Navigator.push(
-                            context, 
-                            PageRouteBuilder(
-                              opaque: false, 
-                              pageBuilder: (_, __, ___) => const CallScreen(
-                                isVideoCall: true,
-                                userName: 'Trần Thị B',
-                                avatarUrl: 'https://i.pravatar.cc/150?img=20',
-                              ),
-                            ),
-                          );
-                        }
+                        onPressed: () => Navigator.push(context, PageRouteBuilder(opaque: false, pageBuilder: (_, __, ___) => const CallScreen(isVideoCall: true, userName: 'Trần Thị B', avatarUrl: 'https://i.pravatar.cc/150?img=20')))
                       ),
-                      // NÚT BẬT/TẮT BẢNG THÔNG TIN
                       IconButton(
-                        icon: Icon(
-                          _showInfoPanel ? Icons.info_rounded : Icons.info_outline, 
-                          color: _showInfoPanel ? primaryColor : textColor.withValues(alpha: 0.6)
-                        ), 
+                        icon: Icon(_showInfoPanel ? Icons.info_rounded : Icons.info_outline, color: _showInfoPanel ? primaryColor : textColor.withValues(alpha: 0.6)), 
                         onPressed: () => setState(() => _showInfoPanel = !_showInfoPanel),
                       ),
                     ],
@@ -187,47 +188,22 @@ class _MainChatAreaState extends State<MainChatArea> {
                   ),
                 ),
                 
-                // 3. KHUNG NHẬP LIỆU
+                // 3. KHUNG NHẬP LIỆU (TÍCH HỢP HIỆU ỨNG GHI ÂM)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
                   color: surfaceColor,
-                  child: Row(
-                    children: [
-                      IconButton(icon: Icon(Icons.add_circle_outline_rounded, color: textColor.withValues(alpha: 0.5)), onPressed: () {}),
-                      IconButton(icon: Icon(Icons.image_outlined, color: textColor.withValues(alpha: 0.5)), onPressed: () {}),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: TextField(
-                          controller: _msgController,
-                          onChanged: (text) => setState(() => _isTyping = text.isNotEmpty),
-                          decoration: InputDecoration(
-                            hintText: 'Nhập tin nhắn...',
-                            hintStyle: TextStyle(color: textColor.withValues(alpha: 0.5)),
-                            filled: true,
-                            fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                            suffixIcon: IconButton(icon: Icon(Icons.sentiment_satisfied_alt_rounded, color: textColor.withValues(alpha: 0.5)), onPressed: () {}),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 200),
-                        transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
-                        child: _isTyping
-                            ? FloatingActionButton(
-                                key: const ValueKey('send'), onPressed: () {},
-                                backgroundColor: primaryColor, elevation: 2, mini: true,
-                                child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
-                              )
-                            : FloatingActionButton(
-                                key: const ValueKey('mic'), onPressed: () {},
-                                backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest, elevation: 0, mini: true,
-                                child: Icon(Icons.mic_none_rounded, color: textColor, size: 22),
-                              ),
-                      ),
-                    ],
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 300),
+                    transitionBuilder: (child, animation) {
+                      return SlideTransition(
+                        position: Tween<Offset>(begin: const Offset(0.0, 0.5), end: Offset.zero).animate(animation),
+                        child: FadeTransition(opacity: animation, child: child),
+                      );
+                    },
+                    // Chuyển đổi giữa Ô gõ chữ và Thanh ghi âm
+                    child: _isRecording 
+                        ? _buildRecordingBar(textColor, primaryColor)
+                        : _buildChatInputBar(textColor, primaryColor),
                   ),
                 ),
               ],
@@ -235,17 +211,12 @@ class _MainChatAreaState extends State<MainChatArea> {
           ),
 
           // ==========================================
-          // CỘT PHẢI: BẢNG THÔNG TIN NÂNG CAO (INFO PANEL)
+          // CỘT PHẢI: BẢNG THÔNG TIN
           // ==========================================
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 300),
             transitionBuilder: (Widget child, Animation<double> animation) {
-              return SizeTransition(
-                sizeFactor: animation,
-                axis: Axis.horizontal,
-                axisAlignment: -1.0,
-                child: child,
-              );
+              return SizeTransition(sizeFactor: animation, axis: Axis.horizontal, axisAlignment: -1.0, child: child);
             },
             child: _showInfoPanel 
                 ? _buildRightInfoPanelWrapper(textColor, primaryColor, surfaceColor) 
@@ -256,20 +227,105 @@ class _MainChatAreaState extends State<MainChatArea> {
     );
   }
 
-  // --- WRAPPER CỐ ĐỊNH CHIỀU RỘNG BẢNG THÔNG TIN ---
+  // --- UI GIAO DIỆN CHAT BÌNH THƯỜNG ---
+  Widget _buildChatInputBar(Color textColor, Color primaryColor) {
+    return Row(
+      key: const ValueKey('chat_input'),
+      children: [
+        IconButton(icon: Icon(Icons.add_circle_outline_rounded, color: textColor.withValues(alpha: 0.5)), onPressed: () {}),
+        IconButton(icon: Icon(Icons.image_outlined, color: textColor.withValues(alpha: 0.5)), onPressed: () {}),
+        const SizedBox(width: 8),
+        Expanded(
+          child: TextField(
+            controller: _msgController,
+            onChanged: (text) => setState(() => _isTyping = text.isNotEmpty),
+            decoration: InputDecoration(
+              hintText: 'Nhập tin nhắn...',
+              hintStyle: TextStyle(color: textColor.withValues(alpha: 0.5)),
+              filled: true,
+              fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              suffixIcon: IconButton(icon: Icon(Icons.sentiment_satisfied_alt_rounded, color: textColor.withValues(alpha: 0.5)), onPressed: () {}),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+          child: _isTyping
+              ? FloatingActionButton(
+                  key: const ValueKey('send'), onPressed: () {},
+                  backgroundColor: primaryColor, elevation: 2, mini: true,
+                  child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                )
+              : FloatingActionButton(
+                  key: const ValueKey('mic'), 
+                  onPressed: _startRecording, // BẤM ĐỂ BẮT ĐẦU GHI ÂM
+                  backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest, elevation: 0, mini: true,
+                  child: Icon(Icons.mic_none_rounded, color: textColor, size: 22),
+                ),
+        ),
+      ],
+    );
+  }
+
+  // --- UI THANH GHI ÂM ĐANG CHẠY ---
+  Widget _buildRecordingBar(Color textColor, Color primaryColor) {
+    return Row(
+      key: const ValueKey('recording_bar'),
+      children: [
+        // Nút Hủy (Thùng rác)
+        IconButton(
+          icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+          onPressed: () => _stopRecording(send: false),
+          tooltip: 'Hủy ghi âm',
+        ),
+        const SizedBox(width: 12),
+        
+        // Thời gian & Hiệu ứng chớp đỏ
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(color: Colors.redAccent.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
+          child: Row(
+            children: [
+              _BlinkingDot(),
+              const SizedBox(width: 8),
+              Text(
+                _formatDuration(_recordDuration),
+                style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 16),
+        
+        // Sóng âm (Sẽ giãn ra chiếm chỗ trống)
+        Expanded(child: VoiceWaveform(primaryColor: primaryColor)),
+        
+        const SizedBox(width: 16),
+        // Nút Gửi thoại
+        FloatingActionButton(
+          onPressed: () => _stopRecording(send: true),
+          backgroundColor: primaryColor,
+          elevation: 2,
+          mini: true,
+          child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+        ),
+      ],
+    );
+  }
+
+  // --- CÁC HÀM XÂY DỰNG PANEL BÊN PHẢI (Giữ nguyên) ---
   Widget _buildRightInfoPanelWrapper(Color textColor, Color primaryColor, Color surfaceColor) {
     return Container(
-      key: const ValueKey('panel'),
-      width: 320, 
-      decoration: BoxDecoration(
-        color: surfaceColor,
-        border: Border(left: BorderSide(color: Colors.grey.withValues(alpha: 0.2))),
-      ),
+      key: const ValueKey('panel'), width: 320, 
+      decoration: BoxDecoration(color: surfaceColor, border: Border(left: BorderSide(color: Colors.grey.withValues(alpha: 0.2)))),
       child: _buildRightInfoPanel(textColor, primaryColor),
     );
   }
 
-  // --- GIAO DIỆN BẢNG THÔNG TIN BÊN PHẢI ---
   Widget _buildRightInfoPanel(Color textColor, Color primaryColor) {
     return SingleChildScrollView(
       child: Column(
@@ -280,7 +336,6 @@ class _MainChatAreaState extends State<MainChatArea> {
           Text('Trần Thị B', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textColor)),
           Text('Trực tuyến', style: TextStyle(fontSize: 14, color: textColor.withValues(alpha: 0.5))),
           const SizedBox(height: 24),
-          
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -293,39 +348,6 @@ class _MainChatAreaState extends State<MainChatArea> {
           ),
           const SizedBox(height: 24),
           Divider(height: 1, color: Colors.grey.withValues(alpha: 0.2)),
-
-          ExpansionTile(
-            title: Text('Ảnh & Video', style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
-            initiallyExpanded: true,
-            iconColor: primaryColor,
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: GridView.count(
-                  crossAxisCount: 3,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  mainAxisSpacing: 8,
-                  crossAxisSpacing: 8,
-                  children: List.generate(6, (index) => ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.network('https://picsum.photos/seed/$index/200', fit: BoxFit.cover),
-                  )),
-                ),
-              )
-            ],
-          ),
-          Divider(height: 1, color: Colors.grey.withValues(alpha: 0.2)),
-
-          ExpansionTile(
-            title: Text('File & Tài liệu', style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
-            iconColor: primaryColor,
-            children: [
-              _buildFileItem('Bao_cao_AI.pdf', '2.4 MB', Icons.picture_as_pdf_rounded, Colors.redAccent, textColor),
-              _buildFileItem('Thuyet_trinh.pptx', '5.1 MB', Icons.insert_chart_rounded, Colors.orange, textColor),
-              _buildFileItem('Source_code.zip', '12 MB', Icons.folder_zip_rounded, Colors.blue, textColor),
-            ],
-          ),
         ],
       ),
     );
@@ -336,38 +358,106 @@ class _MainChatAreaState extends State<MainChatArea> {
       onTap: onTap,
       child: Column(
         children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: textColor.withValues(alpha: 0.8)),
-          ),
+          Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, shape: BoxShape.circle), child: Icon(icon, color: textColor.withValues(alpha: 0.8))),
           const SizedBox(height: 8),
           Text(label, style: TextStyle(fontSize: 12, color: textColor.withValues(alpha: 0.7))),
         ],
       ),
     );
   }
+}
 
-  Widget _buildFileItem(String name, String size, IconData icon, Color iconColor, Color textColor) {
-    return ListTile(
-      leading: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(color: iconColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-        child: Icon(icon, color: iconColor),
-      ),
-      title: Text(name, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: textColor)),
-      subtitle: Text(size, style: TextStyle(fontSize: 12, color: textColor.withValues(alpha: 0.5))),
-      trailing: Icon(Icons.download_rounded, color: textColor.withValues(alpha: 0.4), size: 20),
-      onTap: () {},
+// ==========================================
+// WIDGET CON: Chấm đỏ nhấp nháy
+// ==========================================
+class _BlinkingDot extends StatefulWidget {
+  @override
+  State<_BlinkingDot> createState() => _BlinkingDotState();
+}
+
+class _BlinkingDotState extends State<_BlinkingDot> with SingleTickerProviderStateMixin {
+  late AnimationController _animationController;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(vsync: this, duration: const Duration(milliseconds: 600))..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _animationController,
+      child: Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle)),
     );
   }
 }
 
 // ==========================================
-// WIDGET CON: Bong bóng tin nhắn Hover & FullScreen Image
+// WIDGET CON: Sóng âm tự chế (Waveform)
+// ==========================================
+class VoiceWaveform extends StatefulWidget {
+  final Color primaryColor;
+  const VoiceWaveform({super.key, required this.primaryColor});
+
+  @override
+  State<VoiceWaveform> createState() => _VoiceWaveformState();
+}
+
+class _VoiceWaveformState extends State<VoiceWaveform> {
+  late Timer _timer;
+  final Random _random = Random();
+  // Khởi tạo 30 cột sóng với độ cao ngẫu nhiên ban đầu
+  List<double> _heights = List.generate(30, (index) => 5.0);
+
+  @override
+  void initState() {
+    super.initState();
+    // Thay đổi độ cao các sóng mỗi 150ms để tạo cảm giác có người đang nói
+    _timer = Timer.periodic(const Duration(milliseconds: 150), (timer) {
+      setState(() {
+        _heights = List.generate(30, (index) => _random.nextDouble() * 25 + 5);
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 30, // Chiều cao tối đa của vùng sóng âm
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: _heights.map((height) {
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            width: 4,
+            height: height,
+            decoration: BoxDecoration(
+              color: widget.primaryColor.withValues(alpha: 0.6), // Màu theo theme
+              borderRadius: BorderRadius.circular(4),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+// ==========================================
+// WIDGET CON: Bong bóng tin nhắn
 // ==========================================
 class _HoverableMessageBubble extends StatefulWidget {
   final ChatMessage message;
@@ -379,18 +469,14 @@ class _HoverableMessageBubble extends StatefulWidget {
 
 class _HoverableMessageBubbleState extends State<_HoverableMessageBubble> {
   bool _isHovered = false;
-  
-  // Lưu tọa độ chuột để popup menu hiện ra đúng chỗ
   Offset _tapPosition = Offset.zero;
 
-  // HÀM HIỂN THỊ MENU CHUỘT PHẢI
-  Future<void> _showContextMenu(BuildContext context) async {
+  void _showContextMenu(BuildContext context) async {
   final RenderBox overlay =
       Overlay.of(context).context.findRenderObject() as RenderBox;
-
   final textColor = Theme.of(context).colorScheme.onSurface;
 
-  final result = await showMenu<String>(
+  await showMenu<String>(
     context: context,
     position: RelativeRect.fromRect(
       _tapPosition & const Size(40, 40),
@@ -404,19 +490,19 @@ class _HoverableMessageBubbleState extends State<_HoverableMessageBubble> {
     items: <PopupMenuEntry<String>>[
       PopupMenuItem<String>(
         value: 'reply',
-        child: _buildMenuItem(Icons.reply_rounded, 'Trả lời', textColor),
+        child: _buildMenuItem(
+          Icons.reply_rounded,
+          'Trả lời',
+          textColor,
+        ),
       ),
       PopupMenuItem<String>(
         value: 'copy',
-        child: _buildMenuItem(Icons.copy_rounded, 'Sao chép', textColor),
-      ),
-      PopupMenuItem<String>(
-        value: 'forward',
-        child: _buildMenuItem(Icons.shortcut_rounded, 'Chuyển tiếp', textColor),
-      ),
-      PopupMenuItem<String>(
-        value: 'pin',
-        child: _buildMenuItem(Icons.push_pin_outlined, 'Ghim tin nhắn', textColor),
+        child: _buildMenuItem(
+          Icons.copy_rounded,
+          'Sao chép',
+          textColor,
+        ),
       ),
       const PopupMenuDivider(),
       PopupMenuItem<String>(
@@ -429,27 +515,10 @@ class _HoverableMessageBubbleState extends State<_HoverableMessageBubble> {
       ),
     ],
   );
+  }
 
-  if (!context.mounted || result == null) return;
-
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text('Bạn đã chọn: $result'),
-      behavior: SnackBarBehavior.floating,
-      duration: const Duration(seconds: 1),
-    ),
-  );
-}
-
-  // Widget hỗ trợ vẽ một hàng trong Menu
   Widget _buildMenuItem(IconData icon, String title, Color color) {
-    return Row(
-      children: [
-        Icon(icon, size: 20, color: color),
-        const SizedBox(width: 12),
-        Text(title, style: TextStyle(color: color, fontSize: 14)),
-      ],
-    );
+    return Row(children: [Icon(icon, size: 20, color: color), const SizedBox(width: 12), Text(title, style: TextStyle(color: color, fontSize: 14))]);
   }
 
   @override
@@ -469,69 +538,34 @@ class _HoverableMessageBubbleState extends State<_HoverableMessageBubble> {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             if (isMe && _isHovered) _buildActionIcons(textColor),
-
             Flexible(
-              // BỌC GESTURE DETECTOR ĐỂ BẮT SỰ KIỆN CHUỘT PHẢI
               child: GestureDetector(
-                // onSecondaryTapDown: Bắt lấy tọa độ khi nhấn chuột phải
                 onSecondaryTapDown: (details) => _tapPosition = details.globalPosition,
-                // onSecondaryTap: Thực thi mở menu khi nhả chuột phải
                 onSecondaryTap: () => _showContextMenu(context),
-                
-                // Tiện tay làm luôn cho Mobile: Nhấn giữ (Long Press) cũng hiện Menu
                 onLongPressStart: (details) => _tapPosition = details.globalPosition,
                 onLongPress: () => _showContextMenu(context),
-
                 child: Container(
                   margin: EdgeInsets.only(left: isMe ? 8 : 0, right: isMe ? 0 : 8),
                   padding: widget.message.type == 'image' ? const EdgeInsets.all(4) : const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   constraints: const BoxConstraints(maxWidth: 400),
                   decoration: BoxDecoration(
                     color: isMe ? primaryColor : surfaceColor,
-                    borderRadius: BorderRadius.only(
-                      topLeft: const Radius.circular(18), topRight: const Radius.circular(18),
-                      bottomLeft: Radius.circular(isMe ? 18 : 4), bottomRight: Radius.circular(isMe ? 4 : 18),
-                    ),
+                    borderRadius: BorderRadius.only(topLeft: const Radius.circular(18), topRight: const Radius.circular(18), bottomLeft: Radius.circular(isMe ? 18 : 4), bottomRight: Radius.circular(isMe ? 4 : 18)),
                     boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
                   ),
                   child: Column(
                     crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                     children: [
-                      // Vẫn giữ tính năng Xem ảnh toàn màn hình
                       if (widget.message.type == 'image')
                         MouseRegion(
                           cursor: SystemMouseCursors.click,
                           child: GestureDetector(
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                PageRouteBuilder(
-                                  opaque: false, 
-                                  transitionDuration: const Duration(milliseconds: 300),
-                                  pageBuilder: (context, animation, secondaryAnimation) {
-                                    return FadeTransition(
-                                      opacity: animation,
-                                      child: FullScreenImageViewer(
-                                        imageUrl: widget.message.text,
-                                        heroTag: 'image_${widget.message.text}_${widget.message.time}',
-                                      ),
-                                    );
-                                  },
-                                ),
-                              );
-                            },
-                            child: Hero(
-                              tag: 'image_${widget.message.text}_${widget.message.time}',
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(14), 
-                                child: Image.network(widget.message.text, fit: BoxFit.cover)
-                              ),
-                            ),
+                            onTap: () => Navigator.push(context, PageRouteBuilder(opaque: false, pageBuilder: (context, animation, _) => FadeTransition(opacity: animation, child: FullScreenImageViewer(imageUrl: widget.message.text, heroTag: 'image_${widget.message.text}_${widget.message.time}')))),
+                            child: Hero(tag: 'image_${widget.message.text}_${widget.message.time}', child: ClipRRect(borderRadius: BorderRadius.circular(14), child: Image.network(widget.message.text, fit: BoxFit.cover))),
                           ),
                         )
                       else
                         Text(widget.message.text, style: TextStyle(color: isMe ? Colors.white : textColor, fontSize: 15, height: 1.4)),
-                      
                       const SizedBox(height: 4),
                       Row(
                         mainAxisSize: MainAxisSize.min,
@@ -545,7 +579,6 @@ class _HoverableMessageBubbleState extends State<_HoverableMessageBubble> {
                 ),
               ),
             ),
-
             if (!isMe && _isHovered) _buildActionIcons(textColor),
           ],
         ),
