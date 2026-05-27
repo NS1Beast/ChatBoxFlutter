@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../chat/screens/DashboardScreen.dart';
 import 'AuthController.dart'; // Import Backend
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -12,15 +13,30 @@ class _LoginScreenState extends State<LoginScreen> {
   // Khởi tạo Controller
   final AuthController _controller = AuthController();
 
-  // Hàm xử lý UI khi nhấn nút Đăng nhập
+  // Hàm xử lý UI khi nhấn nút Đăng nhập truyền thống
   void _handleLogin() async {
-    // Hiện tại đang truyền chuỗi rỗng để test. Sau này bạn truyền text từ TextEditingController vào.
     bool success = await _controller.login("email", "password");
     if (success && mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const DashboardScreen()),
-      );
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const DashboardScreen()));
+    }
+  }
+
+  // Hàm xử lý UI Đăng nhập/Đăng ký bằng Mạng xã hội (OAuth)
+  void _handleSocialAuth(String provider) async {
+    // Thông báo cho người dùng biết luồng xử lý
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Đang kết nối $provider... (Tự động tạo tài khoản nếu chưa có)'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    
+    // Giả lập thời gian call API (Sau này thay bằng logic Auth Supabase/Firebase)
+    await Future.delayed(const Duration(seconds: 1));
+    
+    if (mounted) {
+      // Chuyển thẳng vào màn hình chính
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const DashboardScreen()));
     }
   }
 
@@ -32,7 +48,7 @@ class _LoginScreenState extends State<LoginScreen> {
     VoidCallback? onVisibilityToggle,
   }) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 24),
+      padding: const EdgeInsets.only(bottom: 20), // Giảm padding một chút để nhường chỗ cho nút Social
       child: TextFormField(
         obscureText: isPassword && !(isPasswordVisible ?? false),
         decoration: InputDecoration(
@@ -46,14 +62,60 @@ class _LoginScreenState extends State<LoginScreen> {
                   onPressed: onVisibilityToggle,
                 )
               : null,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide.none,
-          ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
           filled: true,
           fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
         ),
       ),
+    );
+  }
+
+  // --- COMPONENT: Khu vực nút bấm Mạng xã hội ---
+  Widget _buildSocialLoginSection(Color textColor) {
+    return Column(
+      children: [
+        const SizedBox(height: 24),
+        Row(
+          children: [
+            Expanded(child: Divider(color: textColor.withValues(alpha: 0.2))),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text('HOẶC', style: TextStyle(color: textColor.withValues(alpha: 0.5), fontSize: 12, fontWeight: FontWeight.bold)),
+            ),
+            Expanded(child: Divider(color: textColor.withValues(alpha: 0.2))),
+          ],
+        ),
+        const SizedBox(height: 24),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => _handleSocialAuth('Google'),
+                icon: const Icon(Icons.g_mobiledata_rounded, size: 28, color: Colors.redAccent), // Dùng icon G tạm thời
+                label: Text('Google', style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  side: BorderSide(color: textColor.withValues(alpha: 0.2)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => _handleSocialAuth('Facebook'),
+                icon: const Icon(Icons.facebook_rounded, color: Colors.blueAccent),
+                label: Text('Facebook', style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  side: BorderSide(color: textColor.withValues(alpha: 0.2)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -68,7 +130,6 @@ class _LoginScreenState extends State<LoginScreen> {
     final double fullWidth = size.width;
     final double halfWidth = fullWidth / 2;
 
-    // Lấy màu nền chuẩn cho Dark/Light mode
     final surfaceColor = Theme.of(context).colorScheme.surface;
     final textColor = Theme.of(context).colorScheme.onSurface;
 
@@ -85,50 +146,30 @@ class _LoginScreenState extends State<LoginScreen> {
           ? Stack(
             children: [
               // ==========================================
-              // LỚP 1: CÁC FORM ĐIỀN THÔNG TIN (Vị trí tĩnh)
+              // LỚP 1: CÁC FORM ĐIỀN THÔNG TIN 
               // ==========================================
               
               // 1. Form Đăng Nhập
               Positioned(
-                top: 0, bottom: 0, left: 0, 
-                width: halfWidth,
-                child: Container(
-                  color: surfaceColor,
-                  child: _buildLoginForm(isDesktop, textColor),
-                ),
+                top: 0, bottom: 0, left: 0, width: halfWidth,
+                child: Container(color: surfaceColor, child: _buildLoginForm(isDesktop, textColor)),
               ),
 
               // 2. Form Đăng Ký
               Positioned(
-                top: 0, bottom: 0, left: halfWidth, 
-                width: halfWidth,
+                top: 0, bottom: 0, left: halfWidth, width: halfWidth,
                 child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 400),
-                  opacity: isRegister ? 1.0 : 0.0,
-                  child: IgnorePointer(
-                    ignoring: !isRegister,
-                    child: Container(
-                      color: surfaceColor,
-                      child: _buildRegisterForm(isDesktop, textColor),
-                    ),
-                  ),
+                  duration: const Duration(milliseconds: 400), opacity: isRegister ? 1.0 : 0.0,
+                  child: IgnorePointer(ignoring: !isRegister, child: Container(color: surfaceColor, child: _buildRegisterForm(isDesktop, textColor))),
                 ),
               ),
 
               // 3. Form Quên Mật Khẩu
               Positioned(
-                top: 0, bottom: 0, left: halfWidth,
-                width: halfWidth,
+                top: 0, bottom: 0, left: halfWidth, width: halfWidth,
                 child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 400),
-                  opacity: isForgot ? 1.0 : 0.0,
-                  child: IgnorePointer(
-                    ignoring: !isForgot,
-                    child: Container(
-                      color: surfaceColor,
-                      child: _buildForgotPasswordForm(isDesktop, textColor),
-                    ),
-                  ),
+                  duration: const Duration(milliseconds: 400), opacity: isForgot ? 1.0 : 0.0,
+                  child: IgnorePointer(ignoring: !isForgot, child: Container(color: surfaceColor, child: _buildForgotPasswordForm(isDesktop, textColor))),
                 ),
               ),
 
@@ -137,22 +178,15 @@ class _LoginScreenState extends State<LoginScreen> {
               // ==========================================
               AnimatedPositioned(
                 duration: duration, curve: curve,
-                top: 0, bottom: 0,
-                left: isLogin ? halfWidth : 0,
-                width: halfWidth,
+                top: 0, bottom: 0, left: isLogin ? halfWidth : 0, width: halfWidth,
                 child: AnimatedContainer(
-                  duration: duration,
-                  curve: curve,
+                  duration: duration, curve: curve,
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.primary, 
-                    boxShadow: const [
-                      BoxShadow(color: Colors.black26, blurRadius: 40, offset: Offset(0, 0)) 
-                    ],
+                    boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 40, offset: Offset(0, 0))],
                     borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(isLogin ? 80 : 0),
-                      bottomLeft: Radius.circular(isLogin ? 80 : 0),
-                      topRight: Radius.circular(isLogin ? 0 : 80),
-                      bottomRight: Radius.circular(isLogin ? 0 : 80),
+                      topLeft: Radius.circular(isLogin ? 80 : 0), bottomLeft: Radius.circular(isLogin ? 80 : 0),
+                      topRight: Radius.circular(isLogin ? 0 : 80), bottomRight: Radius.circular(isLogin ? 0 : 80),
                     ),
                   ),
                   child: Center(
@@ -162,24 +196,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         children: [
                           const Icon(Icons.forum_rounded, size: 140, color: Colors.white),
                           const SizedBox(height: 32),
-                          Text(
-                            'Your chat companion, anytime, anywhere',
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 2,
-                            ),
-                          ),
+                          Text('Your chat companion,\nanytime, anywhere', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 2)),
                           const SizedBox(height: 20),
-                          Text(
-                            'Kết nối mọi lúc, mọi nơi\nAn toàn & Tốc độ',
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              color: Colors.white.withValues(alpha: 0.8),
-                              height: 1.6,
-                            ),
-                          ),
+                          Text('Kết nối mọi lúc, mọi nơi\nAn toàn & Tốc độ', textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.white.withValues(alpha: 0.8), height: 1.6)),
                         ],
                       ),
                     ),
@@ -194,11 +213,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Container(
                   key: ValueKey(_controller.currentForm),
                   color: surfaceColor,
-                  child: isLogin
-                      ? _buildLoginForm(isDesktop, textColor)
-                      : isRegister
-                          ? _buildRegisterForm(isDesktop, textColor)
-                          : _buildForgotPasswordForm(isDesktop, textColor),
+                  child: isLogin ? _buildLoginForm(isDesktop, textColor) : isRegister ? _buildRegisterForm(isDesktop, textColor) : _buildForgotPasswordForm(isDesktop, textColor),
                 ),
               ),
           ),
@@ -224,26 +239,15 @@ class _LoginScreenState extends State<LoginScreen> {
                 Icon(Icons.forum_rounded, size: 80, color: Theme.of(context).colorScheme.primary),
                 const SizedBox(height: 32),
               ],
-              Text(
-                'Chào mừng trở lại! 👋',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold, color: textColor),
-                textAlign: isDesktop ? TextAlign.left : TextAlign.center,
-              ),
+              Text('Chào mừng trở lại! 👋', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold, color: textColor), textAlign: isDesktop ? TextAlign.left : TextAlign.center),
               const SizedBox(height: 12),
-              Text(
-                'Vui lòng đăng nhập tài khoản của bạn',
-                style: TextStyle(color: textColor.withValues(alpha: 0.6), fontSize: 16),
-                textAlign: isDesktop ? TextAlign.left : TextAlign.center,
-              ),
+              Text('Vui lòng đăng nhập tài khoản của bạn', style: TextStyle(color: textColor.withValues(alpha: 0.6), fontSize: 16), textAlign: isDesktop ? TextAlign.left : TextAlign.center),
               const SizedBox(height: 48),
               
               _buildTextField(label: 'Email', icon: Icons.email_outlined),
               _buildTextField(
-                label: 'Mật khẩu',
-                icon: Icons.lock_outline,
-                isPassword: true,
-                isPasswordVisible: _controller.isLoginPassVisible,
-                onVisibilityToggle: _controller.toggleLoginPassVisibility,
+                label: 'Mật khẩu', icon: Icons.lock_outline, isPassword: true,
+                isPasswordVisible: _controller.isLoginPassVisible, onVisibilityToggle: _controller.toggleLoginPassVisibility,
               ),
               
               Align(
@@ -253,20 +257,22 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Text('Quên mật khẩu?', style: TextStyle(fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.primary)),
                 ),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
               
               FilledButton(
                 onPressed: _handleLogin,
                 style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 22),
+                  padding: const EdgeInsets.symmetric(vertical: 20),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  elevation: 5,
-                  shadowColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+                  elevation: 5, shadowColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
                 ),
                 child: const Text('ĐĂNG NHẬP', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
               ),
-              const SizedBox(height: 40),
               
+              // KHU VỰC ĐĂNG NHẬP BẰNG MẠNG XÃ HỘI
+              _buildSocialLoginSection(textColor),
+
+              const SizedBox(height: 32),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -302,21 +308,15 @@ class _LoginScreenState extends State<LoginScreen> {
               _buildTextField(label: 'Họ và tên', icon: Icons.person_outline),
               _buildTextField(label: 'Email', icon: Icons.email_outlined),
               _buildTextField(
-                label: 'Mật khẩu',
-                icon: Icons.lock_outline,
-                isPassword: true,
-                isPasswordVisible: _controller.isRegPassVisible,
-                onVisibilityToggle: _controller.toggleRegPassVisibility,
+                label: 'Mật khẩu', icon: Icons.lock_outline, isPassword: true,
+                isPasswordVisible: _controller.isRegPassVisible, onVisibilityToggle: _controller.toggleRegPassVisibility,
               ),
               _buildTextField(
-                label: 'Xác nhận mật khẩu',
-                icon: Icons.lock_reset_outlined,
-                isPassword: true,
-                isPasswordVisible: _controller.isRegConfirmPassVisible,
-                onVisibilityToggle: _controller.toggleRegConfirmPassVisibility,
+                label: 'Xác nhận mật khẩu', icon: Icons.lock_reset_outlined, isPassword: true,
+                isPasswordVisible: _controller.isRegConfirmPassVisible, onVisibilityToggle: _controller.toggleRegConfirmPassVisibility,
               ),
               
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
               FilledButton(
                 onPressed: () async {
                   bool success = await _controller.register("name", "email", "pass");
@@ -325,14 +325,14 @@ class _LoginScreenState extends State<LoginScreen> {
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đăng ký thành công!')));
                   }
                 },
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 22),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                ),
+                style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 20), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
                 child: const Text('ĐĂNG KÝ', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
               ),
-              const SizedBox(height: 32),
               
+              // KHU VỰC ĐĂNG KÝ BẰNG MẠNG XÃ HỘI
+              _buildSocialLoginSection(textColor),
+
+              const SizedBox(height: 32),
               Center(
                 child: TextButton(
                   onPressed: () => _controller.switchForm(AuthFormType.login),
@@ -372,14 +372,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã gửi email khôi phục!')));
                   }
                 },
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 22),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                ),
+                style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 22), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
                 child: const Text('GỬI LIÊN KẾT', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
               ),
               const SizedBox(height: 32),
-
               Center(
                 child: TextButton(
                   onPressed: () => _controller.switchForm(AuthFormType.login),
