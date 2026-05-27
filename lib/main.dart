@@ -1,26 +1,24 @@
 import 'package:flutter/material.dart';
-import 'package:window_manager/window_manager.dart'; // Import thư viện
-import 'core/theme/AppTheme.dart';
-import 'core/theme/theme_controller.dart';
-import 'features/auth/LoginScreen.dart'; 
+import 'package:window_manager/window_manager.dart';
+
+// Import theo chuẩn Absolute Path (Đảm bảo 100% không bị lú class)
+import 'package:chatapp/core/theme/AppTheme.dart';
+import 'package:chatapp/core/theme/theme_controller.dart';
+import 'package:chatapp/features/auth/LoginScreen.dart';
 
 void main() async {
-  // 1. Phải có dòng này để khởi tạo các plugin Native
   WidgetsFlutterBinding.ensureInitialized();
   
-  // 2. Khởi tạo Window Manager
   await windowManager.ensureInitialized();
 
-  // 3. Cấu hình cửa sổ Desktop
-  WindowOptions windowOptions = const WindowOptions(
-    size: Size(1100, 750), // Kích thước mở lên mặc định
-    minimumSize: Size(800, 600), // Không cho người dùng thu nhỏ quá mức này
+  const WindowOptions windowOptions = WindowOptions(
+    size: Size(1100, 750),
+    minimumSize: Size(800, 600),
     center: true,
     backgroundColor: Colors.transparent,
     skipTaskbar: false,
   );
 
-  // 4. Đợi cửa sổ sẵn sàng rồi mới Show lên (Tránh bị giật màn hình trắng lúc bật app)
   windowManager.waitUntilReadyToShow(windowOptions, () async {
     await windowManager.show();
     await windowManager.focus();
@@ -42,14 +40,15 @@ class ChatAppDesktop extends StatelessWidget {
           debugShowCheckedModeBanner: false,
           theme: AppTheme.getTheme(
             primaryColor: themeController.primaryColor, 
-            isDark: false
+            isDark: false,
           ),
           darkTheme: AppTheme.getTheme(
             primaryColor: themeController.primaryColor, 
-            isDark: true
+            isDark: true,
           ),
           themeMode: themeController.themeMode,
-          home: const LoginScreen(),
+          // Đã xóa chữ 'auth.' dư thừa, gọi thẳng Widget LoginScreen
+          home: const LoginScreen(), 
         );
       },
     );

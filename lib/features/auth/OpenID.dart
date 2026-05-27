@@ -19,7 +19,7 @@ class OpenIDService {
 
     await _googleSignIn.initialize(
       serverClientId:
-          '788545360820-4pssp1irp32bb28v1h2ig05r58632bku.apps.googleusercontent.com.apps.googleusercontent.com',
+          '788545360820-4pssp1irp32bb28v1h2ig05r58632bku.apps.googleusercontent.com',
     );
 
     _isGoogleInitialized = true;

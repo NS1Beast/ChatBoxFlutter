@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+// Đảm bảo file này tên là OpenID.dart (hoặc open_id.dart thì ông tự sửa lại import nhé)
+import 'OpenID.dart'; 
+
 enum AuthFormType { login, register, forgotPassword }
 
 class AuthController extends ChangeNotifier {
@@ -13,6 +16,7 @@ class AuthController extends ChangeNotifier {
   bool isRegConfirmPassVisible = false;
 
   final _storage = const FlutterSecureStorage();
+  final OpenIDService _openIDService = OpenIDService();
 
   // Đổi cổng (Port) này cho khớp với Backend C# của ông đang chạy nhé
   final String _baseUrl = 'http://localhost:5000/api/auth'; 
@@ -41,15 +45,12 @@ class AuthController extends ChangeNotifier {
   // GỌI API ĐĂNG NHẬP (CÓ CƠ CHẾ TEST NHANH)
   // ==========================================
   Future<bool> login(String email, String password) async {
-    // 1. CƠ CHẾ TEST NHANH (BACKDOOR) DÀNH CHO DEV
     if (email == '1' && password == '1') {
       debugPrint('Đăng nhập bằng tài khoản DEV (1/1) thành công!');
-      // Lưu một token giả để test các màn hình yêu cầu đăng nhập
       await _storage.write(key: 'jwt_token', value: 'dev_test_token_12345');
       return true;
     }
 
-    // 2. LOGIC GỌI API THẬT NẾU KHÔNG PHẢI TÀI KHOẢN TEST
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/login'),
@@ -64,12 +65,9 @@ class AuthController extends ChangeNotifier {
         final data = jsonDecode(response.body);
         final token = data['token'];
         
-        // Lưu token vào vùng bảo mật
         await _storage.write(key: 'jwt_token', value: token);
-        
         return true;
       } else {
-        // Log lỗi hoặc lấy message từ Backend trả về
         final errorData = jsonDecode(response.body);
         debugPrint('Lỗi đăng nhập: ${errorData['message']}');
         return false;
@@ -109,12 +107,60 @@ class AuthController extends ChangeNotifier {
   }
 
   // ==========================================
-  // GỌI API QUÊN MẬT KHẨU (ĐÃ BỔ SUNG ĐỂ SỬA LỖI)
+  // ĐĂNG NHẬP BẰNG GOOGLE / FACEBOOK
+  // ==========================================
+  Future<bool> loginWithSocial(String provider) async {
+    try {
+      String? token;
+      final normalizedProvider = provider.toLowerCase();
+
+      // Mở trình duyệt để xin Token
+      if (normalizedProvider == 'google') {
+        token = await _openIDService.signInWithGoogle();
+      } else if (normalizedProvider == 'facebook') {
+        token = await _openIDService.signInWithFacebook();
+      } else {
+        debugPrint('Provider không hỗ trợ: $provider');
+        return false;
+      }
+
+      if (token == null || token.isEmpty) {
+        debugPrint('Không lấy được token từ $provider (Có thể user đã bấm Hủy)');
+        return false;
+      }
+
+      // XONG BƯỚC NÀY LÀ CÓ TOKEN CỦA SOCIAL, GỬI XUỐNG C# BẰNG ĐƯỜNG NÀY
+      final endpoint = normalizedProvider == 'google' ? '$_baseUrl/google' : '$_baseUrl/facebook';
+      
+      final response = await http.post(
+        Uri.parse(endpoint),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'token': token}), 
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final jwtToken = data['token']; // Lấy JWT xịn của hệ thống
+        
+        await _storage.write(key: 'jwt_token', value: jwtToken);
+        debugPrint('Đăng nhập $provider thành công toàn tập!');
+        return true;
+      } else {
+        final errorData = jsonDecode(response.body);
+        debugPrint('Lỗi xác thực tại Backend C#: ${errorData['message']}');
+        return false;
+      }
+    } catch (e) {
+      debugPrint('Lỗi Exception loginWithSocial($provider): $e');
+      return false;
+    }
+  }
+
+  // ==========================================
+  // GỌI API QUÊN MẬT KHẨU 
   // ==========================================
   Future<bool> resetPassword(String email) async {
     try {
-      // Tạm thời giả lập thời gian chờ gọi API (1 giây)
-      // Sau này ông viết API C# quên mật khẩu thì thay logic vào đây
       await Future.delayed(const Duration(seconds: 1));
       debugPrint('Đã gửi yêu cầu khôi phục mật khẩu cho: $email');
       return true;
@@ -129,5 +175,6 @@ class AuthController extends ChangeNotifier {
   // ==========================================
   Future<void> logout() async {
     await _storage.delete(key: 'jwt_token');
+    await _openIDService.signOut(); // Đăng xuất luôn khỏi Google/FB
   }
 }

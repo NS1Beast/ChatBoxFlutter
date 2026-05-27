@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import '../chat/screens/DashboardScreen.dart';
-import 'AuthController.dart'; // Import Backend
+// Nhớ tạo file DashboardScreen trống nếu chưa có, hoặc comment dòng này lại để test
+import '../chat/screens/DashboardScreen.dart'; 
+import 'AuthController.dart'; 
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -10,33 +11,41 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  // Khởi tạo Controller
   final AuthController _controller = AuthController();
 
-  // Hàm xử lý UI khi nhấn nút Đăng nhập truyền thống
+  // Hàm xử lý Đăng nhập truyền thống
   void _handleLogin() async {
-    bool success = await _controller.login("email", "password");
+    // Tạm thời gọi cứng để test, sau này ông gán TextEditingController vào đây nhé
+    bool success = await _controller.login("1", "1");
     if (success && mounted) {
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const DashboardScreen()));
     }
   }
 
-  // Hàm xử lý UI Đăng nhập/Đăng ký bằng Mạng xã hội (OAuth)
+  // Hàm xử lý Đăng nhập Mạng xã hội (Google / Facebook) ĐỒ THẬT
   void _handleSocialAuth(String provider) async {
-    // Thông báo cho người dùng biết luồng xử lý
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Đang kết nối $provider... (Tự động tạo tài khoản nếu chưa có)'),
+        content: Text('Đang kết nối $provider...'),
         behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2), 
       ),
     );
     
-    // Giả lập thời gian call API (Sau này thay bằng logic Auth Supabase/Firebase)
-    await Future.delayed(const Duration(seconds: 1));
+    // Gọi sang AuthController để mở trình duyệt
+    bool success = await _controller.loginWithSocial(provider);
     
-    if (mounted) {
-      // Chuyển thẳng vào màn hình chính
+    if (success && mounted) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const DashboardScreen()));
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Đăng nhập $provider thất bại hoặc đã bị hủy!'),
+          backgroundColor: Colors.redAccent,
+        )
+      );
     }
   }
 
@@ -48,7 +57,7 @@ class _LoginScreenState extends State<LoginScreen> {
     VoidCallback? onVisibilityToggle,
   }) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 20), // Giảm padding một chút để nhường chỗ cho nút Social
+      padding: const EdgeInsets.only(bottom: 20), 
       child: TextFormField(
         obscureText: isPassword && !(isPasswordVisible ?? false),
         decoration: InputDecoration(
@@ -70,7 +79,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // --- COMPONENT: Khu vực nút bấm Mạng xã hội ---
   Widget _buildSocialLoginSection(Color textColor) {
     return Column(
       children: [
@@ -91,7 +99,7 @@ class _LoginScreenState extends State<LoginScreen> {
             Expanded(
               child: OutlinedButton.icon(
                 onPressed: () => _handleSocialAuth('Google'),
-                icon: const Icon(Icons.g_mobiledata_rounded, size: 28, color: Colors.redAccent), // Dùng icon G tạm thời
+                icon: const Icon(Icons.g_mobiledata_rounded, size: 28, color: Colors.redAccent),
                 label: Text('Google', style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
@@ -145,17 +153,10 @@ class _LoginScreenState extends State<LoginScreen> {
           body: isDesktop 
           ? Stack(
             children: [
-              // ==========================================
-              // LỚP 1: CÁC FORM ĐIỀN THÔNG TIN 
-              // ==========================================
-              
-              // 1. Form Đăng Nhập
               Positioned(
                 top: 0, bottom: 0, left: 0, width: halfWidth,
                 child: Container(color: surfaceColor, child: _buildLoginForm(isDesktop, textColor)),
               ),
-
-              // 2. Form Đăng Ký
               Positioned(
                 top: 0, bottom: 0, left: halfWidth, width: halfWidth,
                 child: AnimatedOpacity(
@@ -163,8 +164,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: IgnorePointer(ignoring: !isRegister, child: Container(color: surfaceColor, child: _buildRegisterForm(isDesktop, textColor))),
                 ),
               ),
-
-              // 3. Form Quên Mật Khẩu
               Positioned(
                 top: 0, bottom: 0, left: halfWidth, width: halfWidth,
                 child: AnimatedOpacity(
@@ -172,10 +171,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: IgnorePointer(ignoring: !isForgot, child: Container(color: surfaceColor, child: _buildForgotPasswordForm(isDesktop, textColor))),
                 ),
               ),
-
-              // ==========================================
-              // LỚP 2: BRANDING PANEL (Cánh cửa trượt)
-              // ==========================================
               AnimatedPositioned(
                 duration: duration, curve: curve,
                 top: 0, bottom: 0, left: isLogin ? halfWidth : 0, width: halfWidth,
@@ -222,9 +217,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // ==========================================
-  // WIDGET FORMS
-  // ==========================================
   Widget _buildLoginForm(bool isDesktop, Color textColor) {
     return Center(
       child: SingleChildScrollView(
@@ -269,7 +261,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: const Text('ĐĂNG NHẬP', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
               ),
               
-              // KHU VỰC ĐĂNG NHẬP BẰNG MẠNG XÃ HỘI
               _buildSocialLoginSection(textColor),
 
               const SizedBox(height: 32),
@@ -329,7 +320,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: const Text('ĐĂNG KÝ', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
               ),
               
-              // KHU VỰC ĐĂNG KÝ BẰNG MẠNG XÃ HỘI
               _buildSocialLoginSection(textColor),
 
               const SizedBox(height: 32),
