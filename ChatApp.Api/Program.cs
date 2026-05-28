@@ -37,15 +37,8 @@ builder.Services.AddAuthentication(options =>
 
     // Callback mặc định:
     // /signin-google
-})
-.AddFacebook(options =>
-{
-    options.AppId = builder.Configuration["Authentication:Facebook:AppId"]!;
-    options.AppSecret = builder.Configuration["Authentication:Facebook:AppSecret"]!;
-
-    // Callback mặc định:
-    // /signin-facebook
 });
+
 
 // 6. SWAGGER
 builder.Services.AddEndpointsApiExplorer();

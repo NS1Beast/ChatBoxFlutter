@@ -2,9 +2,13 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/theme_controller.dart'; 
 import '../settings/settings_controller.dart'; 
+import '../auth/AuthController.dart'; 
+import '../auth/LoginScreen.dart'; 
 
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
+  final String currentUserId; 
+  
+  const SettingsScreen({super.key, this.currentUserId = "user_test_123"});
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -13,11 +17,15 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final SettingsController _controller = SettingsController();
 
-  // --- CÁC BIẾN TRẠNG THÁI GIẢ LẬP CHO UI MỚI (Sau này ông chuyển sang Controller nhé) ---
-  bool _readReceipts = true;
-  bool _enterToSend = true;
-  bool _autoDownload = true;
-  bool _appLock = false;
+  @override
+  void initState() {
+    super.initState();
+    // 🎯 FIX LỖI TODO: Nạp cấu hình riêng của User và ép Theme đổi màu áo ngay khi vào màn hình
+    _controller.loadSettingsForUser(widget.currentUserId).then((_) {
+      themeController.changePrimaryColor(Color(_controller.primaryColorValue));
+      themeController.toggleDarkMode(_controller.isDarkMode);
+    });
+  }
 
   void _showColorPicker() {
     showDialog(
@@ -38,11 +46,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Wrap(
                   spacing: 16, runSpacing: 16,
                   children: _controller.extendedColors.map((color) {
-                    bool isSelected = themeController.primaryColor.value == color.value;
+                    // 🎯 FIX LỖI DEPRECATED: So sánh trực tiếp 2 Object Color, không xài .value cũ kỹ nữa
+                    bool isSelected = themeController.primaryColor == color;
                     return MouseRegion(
                       cursor: SystemMouseCursors.click,
                       child: GestureDetector(
-                        onTap: () => themeController.changePrimaryColor(color),
+                        onTap: () {
+                          // Đổi màu giao diện hệ thống và ghi vào kho lưu trữ của User đó
+                          themeController.changePrimaryColor(color);
+                          _controller.savePrimaryColor(color);
+                        },
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 200),
                           width: 40, height: 40,
@@ -175,18 +188,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             const Divider(height: 1, indent: 56, endIndent: 16),
                             _buildNavigationTile(Icons.text_fields_rounded, 'Kích thước văn bản', 'Trung bình', onTap: () {}),
                             const Divider(height: 1, indent: 56, endIndent: 16),
-                            _buildSwitchTile(Icons.keyboard_return_rounded, 'Gửi bằng Enter', 'Nhấn phím Enter để gửi tin nhắn thay vì xuống dòng', _enterToSend, (val) => setState(() => _enterToSend = val)),
+                            _buildSwitchTile(Icons.keyboard_return_rounded, 'Gửi bằng Enter', 'Nhấn phím Enter để gửi tin nhắn thay vì xuống dòng', 
+                              _controller.enterToSend, (val) => _controller.toggleEnterToSend(val)),
                           ]),
                           const SizedBox(height: 32),
 
                           // 3. QUYỀN RIÊNG TƯ & BẢO MẬT
                           _buildSectionHeader('Quyền riêng tư & Bảo mật'),
                           _buildSettingsGroup(surfaceColor, [
-                            _buildSwitchTile(Icons.remove_red_eye_outlined, 'Hiển thị "Đã xem"', 'Người khác sẽ thấy khi bạn đã đọc tin nhắn của họ', _readReceipts, (val) => setState(() => _readReceipts = val)),
+                            _buildSwitchTile(Icons.remove_red_eye_outlined, 'Hiển thị "Đã xem"', 'Người khác sẽ thấy khi bạn đã đọc tin nhắn của họ', 
+                              _controller.readReceipts, (val) => _controller.toggleReadReceipts(val)),
                             const Divider(height: 1, indent: 56, endIndent: 16),
                             _buildNavigationTile(Icons.block_rounded, 'Danh sách chặn', 'Quản lý những người bạn đã chặn', onTap: () {}),
                             const Divider(height: 1, indent: 56, endIndent: 16),
-                            _buildSwitchTile(Icons.lock_outline_rounded, 'Khóa ứng dụng', 'Yêu cầu mật khẩu khi mở ứng dụng', _appLock, (val) => setState(() => _appLock = val)),
+                            _buildSwitchTile(Icons.lock_outline_rounded, 'Khóa ứng dụng', 'Yêu cầu mật khẩu khi mở ứng dụng', 
+                              _controller.appLock, (val) => _controller.toggleAppLock(val)),
                           ]),
                           const SizedBox(height: 32),
 
@@ -195,19 +211,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           _buildSettingsGroup(surfaceColor, [
                             _buildNavigationTile(Icons.data_usage_rounded, 'Mức sử dụng dung lượng', 'Chiếm 2.4 GB trên máy tính', onTap: () {}),
                             const Divider(height: 1, indent: 56, endIndent: 16),
-                            _buildSwitchTile(Icons.download_for_offline_rounded, 'Tự động tải phương tiện', 'Tự động lưu ảnh và file đính kèm vào máy tính', _autoDownload, (val) => setState(() => _autoDownload = val)),
+                            _buildSwitchTile(Icons.download_for_offline_rounded, 'Tự động tải phương tiện', 'Tự động lưu ảnh và file đính kèm vào máy tính', 
+                              _controller.autoDownload, (val) => _controller.toggleAutoDownload(val)),
                             const Divider(height: 1, indent: 56, endIndent: 16),
                             _buildNavigationTile(Icons.cleaning_services_rounded, 'Xóa bộ nhớ đệm (Cache)', 'Giải phóng dung lượng rác', iconColor: Colors.orange, onTap: () {}),
                           ]),
                           const SizedBox(height: 32),
 
-                          // 5. GIAO DIỆN & HIỂN THỊ (Cũ)
+                          // 5. GIAO DIỆN & HIỂN THỊ
                           _buildSectionHeader('Giao diện & Hiển thị'),
                           _buildSettingsGroup(surfaceColor, [
-                            _buildSwitchTile(Icons.dark_mode_outlined, 'Chế độ tối (Dark Mode)', 'Sử dụng giao diện nền đen', themeController.isDarkMode, (val) => themeController.toggleDarkMode(val)),
+                            _buildSwitchTile(Icons.dark_mode_outlined, 'Chế độ tối (Dark Mode)', 'Sử dụng giao diện nền đen', themeController.isDarkMode, (val) {
+                              themeController.toggleDarkMode(val);
+                              _controller.saveDarkMode(val);
+                            }),
                             const Divider(height: 1, indent: 56, endIndent: 16),
                             
-                            // Vùng chọn màu chủ đạo
                             Padding(
                               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                               child: Row(
@@ -218,11 +237,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   Row(
                                     children: [
                                       ..._controller.colorPresets.map((color) {
-                                        bool isSelected = themeController.primaryColor.value == color.value;
+                                        // 🎯 FIX LỖI DEPRECATED: So sánh trực tiếp màu sắc
+                                        bool isSelected = themeController.primaryColor == color;
                                         return MouseRegion(
                                           cursor: SystemMouseCursors.click,
                                           child: GestureDetector(
-                                            onTap: () => themeController.changePrimaryColor(color),
+                                            onTap: () {
+                                              themeController.changePrimaryColor(color);
+                                              _controller.savePrimaryColor(color);
+                                            },
                                             child: Container(
                                               margin: const EdgeInsets.only(left: 8), width: 28, height: 28,
                                               decoration: BoxDecoration(color: color, shape: BoxShape.circle, border: isSelected ? Border.all(color: textColor, width: 2) : null),
@@ -240,7 +263,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                             decoration: BoxDecoration(
                                               shape: BoxShape.circle,
                                               gradient: const SweepGradient(colors: [Colors.red, Colors.yellow, Colors.green, Colors.blue, Colors.purple, Colors.red]),
-                                              border: !_controller.colorPresets.contains(themeController.primaryColor) ? Border.all(color: textColor, width: 2) : null,
+                                              border: themeController.primaryColor != const Color(0xFF8470FF) && themeController.primaryColor != const Color(0xFF00C853) && themeController.primaryColor != const Color(0xFF2979FF) ? Border.all(color: textColor, width: 2) : null,
                                               boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 4)],
                                             ),
                                           ),
@@ -254,12 +277,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ]),
                           const SizedBox(height: 32),
 
-                          // 6. THÔNG BÁO & ÂM THANH (Cũ)
+                          // 6. THÔNG BÁO & ÂM THANH
                           _buildSectionHeader('Thông báo & Âm thanh'),
                           _buildSettingsGroup(surfaceColor, [
-                            _buildSwitchTile(Icons.notifications_active_outlined, 'Cho phép thông báo', 'Hiển thị thông báo khi có tin nhắn mới', _controller.notifications, (val) => _controller.toggleNotifications(val)),
+                            _buildSwitchTile(Icons.notifications_active_outlined, 'Cho phép thông báo', 'Hiển thị thông báo khi có tin nhắn mới', 
+                              _controller.notifications, (val) => _controller.toggleNotifications(val)),
                             const Divider(height: 1, indent: 56, endIndent: 16),
-                            _buildSwitchTile(Icons.volume_up_outlined, 'Âm thanh', 'Phát âm thanh khi gửi và nhận tin', _controller.sound, (val) => _controller.toggleSound(val)),
+                            _buildSwitchTile(Icons.volume_up_outlined, 'Âm thanh', 'Phát âm thanh khi gửi và nhận tin', 
+                              _controller.sound, (val) => _controller.toggleSound(val)),
                           ]),
                           const SizedBox(height: 32),
 
@@ -268,7 +293,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           _buildSettingsGroup(surfaceColor, [
                             _buildNavigationTile(Icons.shield_outlined, 'Đổi mật khẩu', 'Cập nhật lại mật khẩu đăng nhập', onTap: () {}),
                             const Divider(height: 1, indent: 56, endIndent: 16),
-                            _buildNavigationTile(Icons.logout_rounded, 'Đăng xuất', 'Thoát tài khoản khỏi thiết bị này', iconColor: Colors.red, textColor: Colors.red, onTap: () {}),
+                            // 🎯 FIX LUỒNG ĐĂNG XUẤT: Gọi hàm hủy Token gốc và chuyển vùng về màn hình Login
+                            _buildNavigationTile(
+                              Icons.logout_rounded, 'Đăng xuất', 'Thoát tài khoản khỏi thiết bị này', 
+                              iconColor: Colors.red, textColor: Colors.red, 
+                              onTap: () async {
+                                final authController = AuthController();
+                                await authController.logout();
+                                if (mounted) {
+                                  Navigator.pushAndRemoveUntil(
+                                    context, 
+                                    MaterialPageRoute(builder: (context) => const LoginScreen()), 
+                                    (route) => false,
+                                  );
+                                }
+                              }
+                            ),
                           ]),
                           const SizedBox(height: 40),
                         ],
@@ -284,30 +324,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  // --- CÁC HÀM XÂY DỰNG COMPONENT ---
-
+  // ... CÁC HÀM XÂY DỰNG COMPONENT KHÁC ...
   Widget _buildSectionHeader(String title) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12, left: 8),
-      child: Text(
-        title.toUpperCase(),
-        style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.grey[600], letterSpacing: 1.2),
-      ),
+      child: Text(title.toUpperCase(), style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.grey[600], letterSpacing: 1.2)),
     );
   }
 
   Widget _buildSettingsGroup(Color surfaceColor, List<Widget> children) {
     return Container(
-      decoration: BoxDecoration(
-        color: surfaceColor,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))],
-      ),
+      decoration: BoxDecoration(color: surfaceColor, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))]),
       child: Column(children: children),
     );
   }
 
-  // Chức năng dạng Switch Tắt/Bật
   Widget _buildSwitchTile(IconData icon, String title, String subtitle, bool value, ValueChanged<bool> onChanged) {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -315,11 +346,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       title: Text(title, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: Theme.of(context).colorScheme.onSurface)),
       subtitle: Text(subtitle, style: TextStyle(color: Colors.grey[500], fontSize: 13)),
       hoverColor: Colors.transparent,
-      trailing: Switch(value: value, onChanged: onChanged, activeColor: Theme.of(context).colorScheme.primary),
+      // 🎯 FIX LỖI DEPRECATED: Đổi activeColor thành activeThumbColor theo tiêu chuẩn mới
+      trailing: Switch(value: value, onChanged: onChanged, activeThumbColor: Theme.of(context).colorScheme.primary),
     );
   }
 
-  // Thêm mới: Chức năng dạng Navigation (Chuyển trang/Mở Dialog)
   Widget _buildNavigationTile(IconData icon, String title, String subtitle, {Color? iconColor, Color? textColor, required VoidCallback onTap}) {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),

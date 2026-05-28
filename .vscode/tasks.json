@@ -1,0 +1,30 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Run C# Backend",
+      "type": "shell",
+      // Lệnh chạy C# với cổng HTTP
+      "command": "dotnet run --launch-profile \"http\"",
+      "options": {
+        // ĐƯỜNG DẪN TỚI THƯ MỤC C# CỦA ÔNG (Nhớ dùng 2 dấu gạch chéo ngược \\ nhé)
+        "cwd": "D:\\IT\\Code\\Flutter\\DoAnGiuaKy\\chatapp\\ChatApp.Api"
+      },
+      "isBackground": true,
+      // Đoạn này cực xịn: Báo cho VS Code biết khi nào C# đã chạy xong để mở Flutter
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^.*$",
+          "file": 1,
+          "location": 2,
+          "message": 3
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^.*Building.*$",
+          "endsPattern": "^.*Now listening on.*$"
+        }
+      }
+    }
+  ]
+}

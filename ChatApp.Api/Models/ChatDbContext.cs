@@ -136,6 +136,12 @@ public partial class ChatDbContext : DbContext
                 .HasMaxLength(20)
                 .HasDefaultValueSql("'member'::character varying")
                 .HasColumnName("role");
+            
+            // THÊM CHAT SETTINGS VÀO ĐÂY ĐỂ MAP VỚI CỘT JSONB TRONG DB
+            entity.Property(e => e.ChatSettings)
+                .HasDefaultValueSql("'{\"mute_notifications\": false, \"theme_color\": \"default\", \"nickname\": null}'::jsonb")
+                .HasColumnType("jsonb")
+                .HasColumnName("chatsettings");
 
             entity.HasOne(d => d.Conversation).WithMany(p => p.Participants)
                 .HasForeignKey(d => d.Conversationid)
@@ -205,6 +211,8 @@ public partial class ChatDbContext : DbContext
             entity.Property(e => e.Passwordhash)
                 .HasMaxLength(255)
                 .HasColumnName("passwordhash");
+            
+            // USER SETTINGS TỒN TẠI SẴN
             entity.Property(e => e.Settings)
                 .HasDefaultValueSql("'{\"theme\": \"light\", \"auto_download\": true, \"notifications\": true}'::jsonb")
                 .HasColumnType("jsonb")

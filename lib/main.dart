@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
-
+import 'package:desktop_webview_window/desktop_webview_window.dart';
 // Import theo chuẩn Absolute Path (Đảm bảo 100% không bị lú class)
 import 'package:chatapp/core/theme/AppTheme.dart';
 import 'package:chatapp/core/theme/theme_controller.dart';
 import 'package:chatapp/features/auth/LoginScreen.dart';
 
-void main() async {
+void main(List<String> args) async {
+  if (runWebViewTitleBarWidget(args)) {
+    return;
+  }
   WidgetsFlutterBinding.ensureInitialized();
   
   await windowManager.ensureInitialized();

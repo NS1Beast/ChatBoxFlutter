@@ -127,3 +127,16 @@ D:\IT\Code\Flutter\DoAnGiuaKy\chatapp\ChatApp.Api\obj\Debug\net10.0\ref\ChatApp.
 D:\IT\Code\Flutter\DoAnGiuaKy\chatapp\ChatApp.Api\bin\Debug\net10.0\Swashbuckle.AspNetCore.Swagger.dll
 D:\IT\Code\Flutter\DoAnGiuaKy\chatapp\ChatApp.Api\bin\Debug\net10.0\Swashbuckle.AspNetCore.SwaggerGen.dll
 D:\IT\Code\Flutter\DoAnGiuaKy\chatapp\ChatApp.Api\bin\Debug\net10.0\Swashbuckle.AspNetCore.SwaggerUI.dll
+D:\IT\Code\Flutter\DoAnGiuaKy\chatapp\ChatApp.Api\bin\Debug\net10.0\Isopoh.Cryptography.Argon2.dll
+D:\IT\Code\Flutter\DoAnGiuaKy\chatapp\ChatApp.Api\bin\Debug\net10.0\Isopoh.Cryptography.Blake2b.dll
+D:\IT\Code\Flutter\DoAnGiuaKy\chatapp\ChatApp.Api\bin\Debug\net10.0\Isopoh.Cryptography.SecureArray.dll
+D:\IT\Code\Flutter\DoAnGiuaKy\chatapp\ChatApp.Api\bin\Debug\net10.0\Microsoft.AspNetCore.Authentication.Facebook.dll
+D:\IT\Code\Flutter\DoAnGiuaKy\chatapp\ChatApp.Api\bin\Debug\net10.0\Microsoft.AspNetCore.Authentication.Google.dll
+D:\IT\Code\Flutter\DoAnGiuaKy\chatapp\ChatApp.Api\bin\Debug\net10.0\Microsoft.AspNetCore.Authentication.JwtBearer.dll
+D:\IT\Code\Flutter\DoAnGiuaKy\chatapp\ChatApp.Api\bin\Debug\net10.0\Microsoft.IdentityModel.Abstractions.dll
+D:\IT\Code\Flutter\DoAnGiuaKy\chatapp\ChatApp.Api\bin\Debug\net10.0\Microsoft.IdentityModel.JsonWebTokens.dll
+D:\IT\Code\Flutter\DoAnGiuaKy\chatapp\ChatApp.Api\bin\Debug\net10.0\Microsoft.IdentityModel.Logging.dll
+D:\IT\Code\Flutter\DoAnGiuaKy\chatapp\ChatApp.Api\bin\Debug\net10.0\Microsoft.IdentityModel.Protocols.dll
+D:\IT\Code\Flutter\DoAnGiuaKy\chatapp\ChatApp.Api\bin\Debug\net10.0\Microsoft.IdentityModel.Protocols.OpenIdConnect.dll
+D:\IT\Code\Flutter\DoAnGiuaKy\chatapp\ChatApp.Api\bin\Debug\net10.0\Microsoft.IdentityModel.Tokens.dll
+D:\IT\Code\Flutter\DoAnGiuaKy\chatapp\ChatApp.Api\bin\Debug\net10.0\System.IdentityModel.Tokens.Jwt.dll

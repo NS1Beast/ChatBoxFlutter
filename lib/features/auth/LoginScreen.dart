@@ -22,18 +22,18 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // Hàm xử lý Đăng nhập Mạng xã hội (Google / Facebook) ĐỒ THẬT
-  void _handleSocialAuth(String provider) async {
+  // Hàm xử lý Đăng nhập Google
+  void _handleGoogleAuth() async {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Đang kết nối $provider...'),
+      const SnackBar(
+        content: Text('Đang kết nối Google...'),
         behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2), 
+        duration: Duration(seconds: 2), 
       ),
     );
     
     // Gọi sang AuthController để mở trình duyệt
-    bool success = await _controller.loginWithSocial(provider);
+    bool success = await _controller.loginWithGoogle();
     
     if (success && mounted) {
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -41,8 +41,8 @@ class _LoginScreenState extends State<LoginScreen> {
     } else if (mounted) {
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Đăng nhập $provider thất bại hoặc đã bị hủy!'),
+        const SnackBar(
+          content: Text('Đăng nhập Google thất bại hoặc đã bị hủy!'),
           backgroundColor: Colors.redAccent,
         )
       );
@@ -81,6 +81,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget _buildSocialLoginSection(Color textColor) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch, // Ép kéo dãn toàn bộ phần tử
       children: [
         const SizedBox(height: 24),
         Row(
@@ -94,34 +95,30 @@ class _LoginScreenState extends State<LoginScreen> {
           ],
         ),
         const SizedBox(height: 24),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () => _handleSocialAuth('Google'),
-                icon: const Icon(Icons.g_mobiledata_rounded, size: 28, color: Colors.redAccent),
-                label: Text('Google', style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  side: BorderSide(color: textColor.withValues(alpha: 0.2)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
+        
+        // Bọc trong SizedBox vô cực để dài ngang mép nút Đăng nhập
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _handleGoogleAuth,
+            icon: const Icon(Icons.g_mobiledata_rounded, size: 32, color: Colors.redAccent),
+            
+            // Dùng FittedBox để chữ tự động co giãn không bao giờ bị tràn khung
+            label: const FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                'Tiếp tục với Google', 
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)
               ),
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () => _handleSocialAuth('Facebook'),
-                icon: const Icon(Icons.facebook_rounded, color: Colors.blueAccent),
-                label: Text('Facebook', style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  side: BorderSide(color: textColor.withValues(alpha: 0.2)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
+            
+            style: OutlinedButton.styleFrom(
+              foregroundColor: textColor, // Màu chữ và hiệu ứng gợn sóng
+              padding: const EdgeInsets.symmetric(vertical: 18), // Chỉnh padding để cao bằng nút FilledButton
+              side: BorderSide(color: textColor.withValues(alpha: 0.25), width: 1.5),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             ),
-          ],
+          ),
         ),
       ],
     );

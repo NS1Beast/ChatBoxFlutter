@@ -18,8 +18,7 @@ class AuthController extends ChangeNotifier {
   final _storage = const FlutterSecureStorage();
   final OpenIDService _openIDService = OpenIDService();
 
-  // Đổi cổng (Port) này cho khớp với Backend C# của ông đang chạy nhé
-  final String _baseUrl = 'http://localhost:5000/api/auth'; 
+  final String _baseUrl = 'http://localhost:5034/api/auth';
 
   void switchForm(AuthFormType type) {
     currentForm = type;
@@ -42,7 +41,7 @@ class AuthController extends ChangeNotifier {
   }
 
   // ==========================================
-  // GỌI API ĐĂNG NHẬP (CÓ CƠ CHẾ TEST NHANH)
+  // GỌI API ĐĂNG NHẬP
   // ==========================================
   Future<bool> login(String email, String password) async {
     if (email == '1' && password == '1') {
@@ -107,51 +106,28 @@ class AuthController extends ChangeNotifier {
   }
 
   // ==========================================
-  // ĐĂNG NHẬP BẰNG GOOGLE / FACEBOOK
+  // ĐĂNG NHẬP BẰNG GOOGLE
   // ==========================================
-  Future<bool> loginWithSocial(String provider) async {
+  Future<bool> loginWithGoogle() async {
     try {
-      String? token;
-      final normalizedProvider = provider.toLowerCase();
+      // 1. Mở trình duyệt, C# sẽ lo việc gọi Google, lưu Database và tạo JWT
+      String? jwtToken = await _openIDService.signInWithGoogle();
 
-      // Mở trình duyệt để xin Token
-      if (normalizedProvider == 'google') {
-        token = await _openIDService.signInWithGoogle();
-      } else if (normalizedProvider == 'facebook') {
-        token = await _openIDService.signInWithFacebook();
-      } else {
-        debugPrint('Provider không hỗ trợ: $provider');
+      // 2. Nếu user tắt ngang cửa sổ trình duyệt
+      if (jwtToken == null || jwtToken.isEmpty) {
+        debugPrint('Không lấy được token từ Google (Có thể user đã bấm Hủy)');
         return false;
       }
 
-      if (token == null || token.isEmpty) {
-        debugPrint('Không lấy được token từ $provider (Có thể user đã bấm Hủy)');
-        return false;
-      }
-
-      // XONG BƯỚC NÀY LÀ CÓ TOKEN CỦA SOCIAL, GỬI XUỐNG C# BẰNG ĐƯỜNG NÀY
-      final endpoint = normalizedProvider == 'google' ? '$_baseUrl/google' : '$_baseUrl/facebook';
+      // 3. KHÚC QUAY XE: Nhận được JWT Token từ C# là đăng nhập XONG!
+      // Không cần gọi thêm API /google nào nữa vì C# đã làm hết rồi.
+      await _storage.write(key: 'jwt_token', value: jwtToken);
       
-      final response = await http.post(
-        Uri.parse(endpoint),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'token': token}), 
-      );
+      debugPrint('Đăng nhập Google Desktop thành công toàn tập!');
+      return true;
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final jwtToken = data['token']; // Lấy JWT xịn của hệ thống
-        
-        await _storage.write(key: 'jwt_token', value: jwtToken);
-        debugPrint('Đăng nhập $provider thành công toàn tập!');
-        return true;
-      } else {
-        final errorData = jsonDecode(response.body);
-        debugPrint('Lỗi xác thực tại Backend C#: ${errorData['message']}');
-        return false;
-      }
     } catch (e) {
-      debugPrint('Lỗi Exception loginWithSocial($provider): $e');
+      debugPrint('Lỗi Exception loginWithGoogle: $e');
       return false;
     }
   }
@@ -175,6 +151,6 @@ class AuthController extends ChangeNotifier {
   // ==========================================
   Future<void> logout() async {
     await _storage.delete(key: 'jwt_token');
-    await _openIDService.signOut(); // Đăng xuất luôn khỏi Google/FB
+    await _openIDService.signOut();
   }
 }

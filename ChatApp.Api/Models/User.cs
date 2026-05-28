@@ -30,4 +30,5 @@ public partial class User
     public virtual ICollection<Participant> Participants { get; set; } = new List<Participant>();
 
     public virtual ICollection<Post> Posts { get; set; } = new List<Post>();
+    public UserSettings Settings { get; set; } = new UserSettings();
 }

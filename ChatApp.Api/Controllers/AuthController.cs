@@ -110,18 +110,17 @@ namespace ChatApp.Api.Controllers
         }
 
         // ==========================================
-        // 4. API DÀNH CHO DESKTOP: GỌI GOOGLE / FACEBOOK
+        // 4. API DÀNH CHO DESKTOP: GỌI GOOGLE
         // Flutter Desktop mở link:
         // GET api/auth/desktop-login/google
-        // GET api/auth/desktop-login/facebook
         // ==========================================
         [HttpGet("desktop-login/{provider}")]
         public IActionResult DesktopLogin(string provider)
         {
+            // Đã xóa hoàn toàn Facebook khỏi bộ lọc
             string scheme = provider.ToLower() switch
             {
                 "google" => "Google",
-                "facebook" => "Facebook",
                 _ => string.Empty
             };
 
@@ -129,7 +128,7 @@ namespace ChatApp.Api.Controllers
             {
                 return BadRequest(new
                 {
-                    message = "Provider không hợp lệ. Chỉ hỗ trợ google hoặc facebook."
+                    message = "Provider không hợp lệ. Hệ thống hiện chỉ hỗ trợ đăng nhập bằng Google."
                 });
             }
 

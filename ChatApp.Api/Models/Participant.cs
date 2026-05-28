@@ -18,4 +18,5 @@ public partial class Participant
     public virtual Conversation Conversation { get; set; } = null!;
 
     public virtual User User { get; set; } = null!;
+    public ChatSettings ChatSettings { get; set; } = new ChatSettings();
 }
