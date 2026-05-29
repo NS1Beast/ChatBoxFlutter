@@ -1,4 +1,4 @@
-// Đường dẫn: lib/features/settings/screens/SettingsScreen.dart
+// Đường dẫn: lib/features/settings/screens/settings_screen.dart (Khuyến nghị đổi tên file thường)
 import 'package:flutter/material.dart';
 import '../../../core/theme/theme_controller.dart'; 
 import '../settings/settings_controller.dart'; 
@@ -6,9 +6,7 @@ import '../auth/AuthController.dart';
 import '../auth/LoginScreen.dart'; 
 
 class SettingsScreen extends StatefulWidget {
-  final String currentUserId; 
-  
-  const SettingsScreen({super.key, this.currentUserId = "user_test_123"});
+  const SettingsScreen({super.key});
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -20,11 +18,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    // 🎯 FIX LỖI TODO: Nạp cấu hình riêng của User và ép Theme đổi màu áo ngay khi vào màn hình
-    _controller.loadSettingsForUser(widget.currentUserId).then((_) {
-      themeController.changePrimaryColor(Color(_controller.primaryColorValue));
-      themeController.toggleDarkMode(_controller.isDarkMode);
-    });
+    // Tự động quét ID User và load trạng thái Nút gạt mà không cần truyền biến vào Constructor nữa
+    _initSettings();
+  }
+
+  Future<void> _initSettings() async {
+    String userId = await AuthController().getCurrentUserId();
+    await _controller.loadSettingsForUser(userId);
   }
 
   void _showColorPicker() {
@@ -46,13 +46,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Wrap(
                   spacing: 16, runSpacing: 16,
                   children: _controller.extendedColors.map((color) {
-                    // 🎯 FIX LỖI DEPRECATED: So sánh trực tiếp 2 Object Color, không xài .value cũ kỹ nữa
                     bool isSelected = themeController.primaryColor == color;
                     return MouseRegion(
                       cursor: SystemMouseCursors.click,
                       child: GestureDetector(
                         onTap: () {
-                          // Đổi màu giao diện hệ thống và ghi vào kho lưu trữ của User đó
                           themeController.changePrimaryColor(color);
                           _controller.savePrimaryColor(color);
                         },
@@ -237,7 +235,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   Row(
                                     children: [
                                       ..._controller.colorPresets.map((color) {
-                                        // 🎯 FIX LỖI DEPRECATED: So sánh trực tiếp màu sắc
                                         bool isSelected = themeController.primaryColor == color;
                                         return MouseRegion(
                                           cursor: SystemMouseCursors.click,
@@ -293,7 +290,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           _buildSettingsGroup(surfaceColor, [
                             _buildNavigationTile(Icons.shield_outlined, 'Đổi mật khẩu', 'Cập nhật lại mật khẩu đăng nhập', onTap: () {}),
                             const Divider(height: 1, indent: 56, endIndent: 16),
-                            // 🎯 FIX LUỒNG ĐĂNG XUẤT: Gọi hàm hủy Token gốc và chuyển vùng về màn hình Login
                             _buildNavigationTile(
                               Icons.logout_rounded, 'Đăng xuất', 'Thoát tài khoản khỏi thiết bị này', 
                               iconColor: Colors.red, textColor: Colors.red, 
@@ -324,7 +320,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  // ... CÁC HÀM XÂY DỰNG COMPONENT KHÁC ...
   Widget _buildSectionHeader(String title) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12, left: 8),
@@ -346,7 +341,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       title: Text(title, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: Theme.of(context).colorScheme.onSurface)),
       subtitle: Text(subtitle, style: TextStyle(color: Colors.grey[500], fontSize: 13)),
       hoverColor: Colors.transparent,
-      // 🎯 FIX LỖI DEPRECATED: Đổi activeColor thành activeThumbColor theo tiêu chuẩn mới
       trailing: Switch(value: value, onChanged: onChanged, activeThumbColor: Theme.of(context).colorScheme.primary),
     );
   }

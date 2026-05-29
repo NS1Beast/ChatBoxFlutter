@@ -1,6 +1,10 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../../profile/ProfileScreen.dart';
-class ChatNavigationRail extends StatelessWidget {
+// Nhớ import ProfileController vào đây
+import '../../profile/ProfileController.dart'; 
+
+class ChatNavigationRail extends StatefulWidget {
   final int selectedIndex;
   final ValueChanged<int> onDestinationSelected;
 
@@ -9,6 +13,25 @@ class ChatNavigationRail extends StatelessWidget {
     required this.selectedIndex,
     required this.onDestinationSelected,
   });
+
+  @override
+  State<ChatNavigationRail> createState() => _ChatNavigationRailState();
+}
+
+class _ChatNavigationRailState extends State<ChatNavigationRail> {
+  // Vì đã làm Singleton ở Bước 1, nên cái controller này CHÍNH LÀ cái controller bên trang Profile
+  final ProfileController _profileController = ProfileController();
+
+  // Hàm check ảnh ưu tiên: Ảnh vừa cắt (Local) -> Ảnh Google (Network) -> Icon Mặc định
+  ImageProvider _getAvatarImage() {
+    if (_profileController.localAvatarBytes != null) {
+      return MemoryImage(_profileController.localAvatarBytes!); 
+    } else if (_profileController.avatarUrl.isNotEmpty) {
+      return NetworkImage(_profileController.avatarUrl); 
+    } else {
+      return MemoryImage(Uint8List(0)); 
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -33,10 +56,12 @@ class ChatNavigationRail extends StatelessWidget {
           _buildNavItem(Icons.settings_rounded, Icons.settings_outlined, 4),
           const SizedBox(height: 16),
           
-          // Avatar của bạn (Góc dưới cùng)
+          // ==========================================
+          // AVATAR NGƯỜI DÙNG ĐÃ ĐỒNG BỘ
+          // ==========================================
           Padding(
             padding: const EdgeInsets.only(bottom: 24.0),
-            child: InkWell( // Bọc InkWell ở đây
+            child: InkWell( 
               onTap: () {
                 Navigator.push(
                   context,
@@ -50,9 +75,20 @@ class ChatNavigationRail extends StatelessWidget {
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.white54, width: 2),
                 ),
-                child: const CircleAvatar(
-                  radius: 18,
-                  backgroundImage: NetworkImage('https://i.pravatar.cc/150?img=11'),
+                // 🎯 ListenableBuilder giúp Avatar tự load lại khi bên Controller có lệnh notifyListeners()
+                child: ListenableBuilder(
+                  listenable: _profileController,
+                  builder: (context, child) {
+                    return CircleAvatar(
+                      radius: 18,
+                      backgroundColor: Colors.white24,
+                      backgroundImage: _getAvatarImage(),
+                      // Fallback: Nếu không có ảnh thì hiện Icon mặc định
+                      child: (_profileController.localAvatarBytes == null && _profileController.avatarUrl.isEmpty) 
+                          ? const Icon(Icons.person_rounded, size: 20, color: Colors.white) 
+                          : null,
+                    );
+                  }
                 ),
               ),
             ),
@@ -63,7 +99,7 @@ class ChatNavigationRail extends StatelessWidget {
   }
 
   Widget _buildNavItem(IconData activeIcon, IconData inactiveIcon, int index) {
-    final isSelected = selectedIndex == index;
+    final isSelected = widget.selectedIndex == index;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12.0),
       child: IconButton(
@@ -72,7 +108,7 @@ class ChatNavigationRail extends StatelessWidget {
           color: isSelected ? Colors.white : Colors.white54,
           size: 26,
         ),
-        onPressed: () => onDestinationSelected(index),
+        onPressed: () => widget.onDestinationSelected(index),
         // Thêm hiệu ứng nền mờ khi được chọn
         style: IconButton.styleFrom(
           backgroundColor: isSelected ? Colors.white.withValues(alpha: 0.2) : Colors.transparent,

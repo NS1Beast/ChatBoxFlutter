@@ -1,9 +1,10 @@
 {
   "version": 2,
-  "dgSpecHash": "EmjQZmyD0Yw=",
+  "dgSpecHash": "RH1NID7K1XY=",
   "success": true,
   "projectFilePath": "D:\\IT\\Code\\Flutter\\DoAnGiuaKy\\chatapp\\ChatApp.Api\\ChatApp.Api.csproj",
   "expectedPackageFiles": [
+    "C:\\Users\\fvgfv\\.nuget\\packages\\bcrypt.net-next\\4.2.0\\bcrypt.net-next.4.2.0.nupkg.sha512",
     "C:\\Users\\fvgfv\\.nuget\\packages\\humanizer.core\\2.14.1\\humanizer.core.2.14.1.nupkg.sha512",
     "C:\\Users\\fvgfv\\.nuget\\packages\\isopoh.cryptography.argon2\\2.0.0\\isopoh.cryptography.argon2.2.0.0.nupkg.sha512",
     "C:\\Users\\fvgfv\\.nuget\\packages\\isopoh.cryptography.blake2b\\2.0.0\\isopoh.cryptography.blake2b.2.0.0.nupkg.sha512",

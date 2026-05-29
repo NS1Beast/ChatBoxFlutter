@@ -17,8 +17,6 @@ public partial class User
 
     public string? Bio { get; set; }
 
-    public string? Settings { get; set; }
-
     public DateTime? Createdat { get; set; }
 
     public virtual ICollection<Contact> ContactFriends { get; set; } = new List<Contact>();
@@ -30,5 +28,6 @@ public partial class User
     public virtual ICollection<Participant> Participants { get; set; } = new List<Participant>();
 
     public virtual ICollection<Post> Posts { get; set; } = new List<Post>();
+
     public UserSettings Settings { get; set; } = new UserSettings();
 }

@@ -8,6 +8,11 @@ import '../../settings/SettingsScreen.dart';
 import '../../contacts/ContactsScreen.dart';
 import '../../timeline/TimelineScreen.dart';
 import '../../notifications/NotificationsScreen.dart';
+import '../../profile/ProfileController.dart';
+// THÊM 3 DÒNG NÀY ĐỂ KÍCH HOẠT THEME NGAY KHI VÀO DASHBOARD
+import '../../../core/theme/theme_controller.dart'; 
+import '../../settings/settings_controller.dart'; 
+import '../../auth/AuthController.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -18,9 +23,30 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
-  
-  // BIẾN LƯU TRẠNG THÁI: ID của người đang được chat (null = chưa chọn ai)
   String? _activeChatId;
+
+  @override
+  void initState() {
+    super.initState();
+    // VỪA VÀO DASHBOARD LÀ ÉP NẠP GIAO DIỆN NGAY!
+    _loadUserTheme();
+  }
+
+  Future<void> _loadUserTheme() async {
+    final authController = AuthController();
+    final settingsController = SettingsController();
+    
+    // 1. Lấy ID của tài khoản đang đăng nhập
+    String userId = await authController.getCurrentUserId();
+    
+    // 2. Chui vào ổ cứng móc cấu hình của riêng user này ra
+    await settingsController.loadSettingsForUser(userId);
+    
+    // 3. Thay áo cho toàn bộ App ngay tắp lự
+    themeController.changePrimaryColor(Color(settingsController.primaryColorValue));
+    themeController.toggleDarkMode(settingsController.isDarkMode);
+    await ProfileController().loadUserProfile(userId);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -29,7 +55,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       body: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // 1. Navigation (Sidebar màu tím)
+          // 1. Navigation
           ChatNavigationRail(
             selectedIndex: _selectedIndex,
             onDestinationSelected: (int index) {
@@ -67,20 +93,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               color: Theme.of(context).colorScheme.surface,
                               border: Border(right: BorderSide(color: Colors.grey.withValues(alpha: 0.2), width: 1)),
                             ),
-                            // Hứng sự kiện click từ danh sách
                             child: ChatListPanel(
                               onChatSelected: (chatId) {
                                 setState(() {
-                                  _activeChatId = chatId; // Cập nhật ID để tắt màn hình Welcome
+                                  _activeChatId = chatId;
                                 });
                               },
                             ), 
                           ),
                           
-                          // Điều kiện hiển thị thông minh: Có ID thì mở Chat, Không có thì mở Welcome
                           Expanded(
                             child: _activeChatId != null 
-                                ? const MainChatArea() // (Sau này ông có thể truyền _activeChatId vào MainChatArea(id: _activeChatId) để load đúng tin nhắn)
+                                ? const MainChatArea() 
                                 : const WelcomeScreen(), 
                           ), 
                         ],

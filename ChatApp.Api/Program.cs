@@ -1,16 +1,26 @@
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
 using ChatApp.Api.Models;
+using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. DATABASE POSTGRESQL
+// ==========================================
+// 1. DATABASE POSTGRESQL (NÂNG CẤP HỖ TRỢ JSONB)
+// ==========================================
+var connString = builder.Configuration.GetConnectionString("DefaultConnection");
+var dataSourceBuilder = new NpgsqlDataSourceBuilder(connString);
+
+// Bật tính năng convert tự động JSONB sang Object C#
+dataSourceBuilder.EnableDynamicJson(); 
+var dataSource = dataSourceBuilder.Build();
+
 builder.Services.AddDbContext<ChatDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(dataSource));
 
 // 2. CONTROLLERS
 builder.Services.AddControllers();
-
+builder.Services.AddMemoryCache();
 // 3. SIGNALR
 builder.Services.AddSignalR();
 
@@ -19,14 +29,14 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFlutterApp", policy =>
         policy.AllowAnyOrigin()
-              .AllowAnyMethod()
-              .AllowAnyHeader());
+            .AllowAnyMethod()
+            .AllowAnyHeader());
 });
 
-// 5. CẤU HÌNH ĐĂNG NHẬP GOOGLE / FACEBOOK
+// 5. CẤU HÌNH ĐĂNG NHẬP GOOGLE
 builder.Services.AddAuthentication(options =>
 {
-    // Cookie dùng để giữ trạng thái tạm trong lúc redirect qua Google/Facebook
+    // Cookie dùng để giữ trạng thái tạm trong lúc redirect qua Google
     options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
 })
 .AddCookie()
@@ -35,10 +45,8 @@ builder.Services.AddAuthentication(options =>
     options.ClientId = builder.Configuration["Authentication:Google:ClientId"]!;
     options.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"]!;
 
-    // Callback mặc định:
-    // /signin-google
+    // Callback mặc định: /signin-google
 });
-
 
 // 6. SWAGGER
 builder.Services.AddEndpointsApiExplorer();
