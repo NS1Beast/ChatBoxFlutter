@@ -24,7 +24,6 @@ class ProfileController extends ChangeNotifier {
   String headline = 'Senior IT Student - AI Enthusiast 🚀';
   String bio = 'Đam mê C#, Python & Flutter | Thích Gym & Gaming';
   String email = 'Đang tải...';
-  String phoneNumber = '+84 123 456 789';
   String location = 'Hồ Chí Minh, Việt Nam';
   String joinDate = 'Tháng 5, 2026';
 
@@ -42,13 +41,10 @@ class ProfileController extends ChangeNotifier {
   Future<void> loadUserProfile(String userId) async {
     final prefs = await SharedPreferences.getInstance();
     
-    // 1. Lấy tên tự sửa từ local (nếu có)
     String? localCustomName = prefs.getString('${userId}_name');
-
     const storage = FlutterSecureStorage();
     String? token = await storage.read(key: 'jwt_token');
 
-    // 2. MỔ BỤNG JWT TOKEN (Phiên bản đã tối ưu bắt Key chuẩn)
     if (token != null && token.isNotEmpty) {
       try {
         final parts = token.split('.');
@@ -58,22 +54,19 @@ class ProfileController extends ChangeNotifier {
           final payload = utf8.decode(base64Url.decode(payloadStr));
           final payloadMap = jsonDecode(payload);
           
-          // 🎯 BẮT ĐÚNG KEY "fullname" TỪ C# TRẢ VỀ
           String dbName = payloadMap['fullname'] ?? "";
           String dbEmail = payloadMap['email'] ?? "";
           String dbAvatar = payloadMap['avatar'] ?? "";
 
-          // Cập nhật Tên (Ưu tiên DB -> Local -> Mặc định)
           if (dbName.isNotEmpty) {
             fullName = dbName;
-              await prefs.setString('${userId}_name', dbName);
-            } else if (localCustomName != null && localCustomName.isNotEmpty) {
-              fullName = localCustomName;
-            } else {
-              fullName = "Người dùng";
-            }
+            await prefs.setString('${userId}_name', dbName);
+          } else if (localCustomName != null && localCustomName.isNotEmpty) {
+            fullName = localCustomName;
+          } else {
+            fullName = "Người dùng";
+          }
 
-          // Cập nhật Email và Avatar
           if (dbEmail.isNotEmpty) email = dbEmail;
           if (dbAvatar.isNotEmpty) avatarUrl = dbAvatar;
         }
@@ -84,10 +77,8 @@ class ProfileController extends ChangeNotifier {
       if (localCustomName != null && localCustomName.isNotEmpty) fullName = localCustomName;
     }
 
-    // 3. Load các thông tin phụ từ Local
     headline = prefs.getString('${userId}_headline') ?? headline;
     bio = prefs.getString('${userId}_bio') ?? bio;
-    phoneNumber = prefs.getString('${userId}_phone') ?? phoneNumber;
     location = prefs.getString('${userId}_location') ?? location;
 
     String? avatarBase64 = prefs.getString('${userId}_avatarBytes');
@@ -100,7 +91,7 @@ class ProfileController extends ChangeNotifier {
   }
 
   // ==========================================
-  // HÀM CHỌN & LƯU ẢNH 
+  // HÀM CHỌN & LƯU ẢNH (ĐÃ FIX LỖI CROP WEB)
   // ==========================================
   Future<void> pickAndCropAvatar(BuildContext context, String userId) async {
     final XFile? pickedFile = await _picker.pickImage(source: ImageSource.gallery);
@@ -112,10 +103,26 @@ class ProfileController extends ChangeNotifier {
       } else {
         CroppedFile? croppedFile = await ImageCropper().cropImage(
           sourcePath: pickedFile.path,
-          aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+          aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1), 
           uiSettings: [
-            WebUiSettings(context: context),
-            AndroidUiSettings(toolbarTitle: 'Cắt ảnh đại diện', toolbarColor: Colors.deepPurple, toolbarWidgetColor: Colors.white, lockAspectRatio: true),
+            AndroidUiSettings(
+              toolbarTitle: 'Căn chỉnh Avatar',
+              toolbarColor: Theme.of(context).colorScheme.primary,
+              toolbarWidgetColor: Colors.white,
+              initAspectRatio: CropAspectRatioPreset.square,
+              lockAspectRatio: true, 
+              hideBottomControls: false, 
+            ),
+            IOSUiSettings(
+              title: 'Căn chỉnh Avatar',
+              cancelButtonTitle: 'Hủy',
+              doneButtonTitle: 'Xong',
+              aspectRatioLockEnabled: true,
+            ),
+            // 🎯 Đã bỏ thuộc tính gây lỗi ở Web
+            WebUiSettings(
+              context: context,
+            ),
           ],
         );
         if (croppedFile != null) { localAvatarBytes = await croppedFile.readAsBytes(); }
@@ -141,8 +148,24 @@ class ProfileController extends ChangeNotifier {
           sourcePath: pickedFile.path,
           aspectRatio: const CropAspectRatio(ratioX: 16, ratioY: 9),
           uiSettings: [
-            WebUiSettings(context: context),
-            AndroidUiSettings(toolbarTitle: 'Cắt ảnh bìa', toolbarColor: Colors.deepPurple, toolbarWidgetColor: Colors.white, lockAspectRatio: true),
+            AndroidUiSettings(
+              toolbarTitle: 'Căn chỉnh ảnh bìa',
+              toolbarColor: Theme.of(context).colorScheme.primary,
+              toolbarWidgetColor: Colors.white,
+              initAspectRatio: CropAspectRatioPreset.ratio16x9,
+              lockAspectRatio: true,
+              hideBottomControls: false,
+            ),
+            IOSUiSettings(
+              title: 'Căn chỉnh ảnh bìa',
+              cancelButtonTitle: 'Hủy',
+              doneButtonTitle: 'Xong',
+              aspectRatioLockEnabled: true,
+            ),
+            // 🎯 Đã bỏ thuộc tính gây lỗi ở Web
+            WebUiSettings(
+              context: context,
+            ),
           ],
         );
         if (croppedFile != null) { localCoverBytes = await croppedFile.readAsBytes(); }
@@ -161,15 +184,14 @@ class ProfileController extends ChangeNotifier {
   // ==========================================
   Future<void> updateProfileText({
     required String userId, required String newName, required String newHeadline, 
-    required String newBio, required String newPhone, required String newLocation
+    required String newBio, required String newLocation
   }) async {
-    fullName = newName; headline = newHeadline; bio = newBio; phoneNumber = newPhone; location = newLocation;
+    fullName = newName; headline = newHeadline; bio = newBio; location = newLocation;
     
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('${userId}_name', newName); 
     await prefs.setString('${userId}_headline', newHeadline);
     await prefs.setString('${userId}_bio', newBio);
-    await prefs.setString('${userId}_phone', newPhone);
     await prefs.setString('${userId}_location', newLocation);
 
     notifyListeners();

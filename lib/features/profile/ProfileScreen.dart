@@ -1,9 +1,8 @@
-// Đường dẫn: lib/features/profile/ProfileScreen.dart
+// ignore_file: file_names
 import 'package:flutter/material.dart';
 import 'dart:typed_data';
 import 'ProfileController.dart'; 
-// Nhớ import AuthController để lấy ID nhé
-import '../../features/auth/AuthController.dart'; // Đổi đường dẫn cho khớp máy ông nếu cần
+import '../../features/auth/AuthController.dart'; 
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -14,8 +13,6 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final ProfileController _controller = ProfileController();
-  
-  // 🎯 Thêm biến này để lưu ID của user, lát nữa truyền vào các hàm cắt ảnh/lưu chữ
   String _currentUserId = "guest"; 
 
   @override
@@ -25,9 +22,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _loadProfileData() async {
-    // 1. Lấy ID của ông đang đăng nhập và gán vào biến toàn cục của class
     _currentUserId = await AuthController().getCurrentUserId();
-    // 2. Chọc lên Backend lấy Avatar Google và Tên về đắp vào giao diện
     await _controller.loadUserProfile(_currentUserId);
   }
 
@@ -35,7 +30,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final nameCtrl = TextEditingController(text: _controller.fullName);
     final headlineCtrl = TextEditingController(text: _controller.headline);
     final bioCtrl = TextEditingController(text: _controller.bio);
-    final phoneCtrl = TextEditingController(text: _controller.phoneNumber);
     final locationCtrl = TextEditingController(text: _controller.location);
 
     showDialog(
@@ -55,8 +49,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(height: 16),
                 _buildTextField(bioCtrl, 'Giới thiệu bản thân (Bio)', Icons.info_outline, maxLines: 3),
                 const SizedBox(height: 16),
-                _buildTextField(phoneCtrl, 'Số điện thoại', Icons.phone),
-                const SizedBox(height: 16),
                 _buildTextField(locationCtrl, 'Vị trí', Icons.location_on_outlined),
               ],
             ),
@@ -66,13 +58,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Hủy')),
           FilledButton(
             onPressed: () {
-              // 🎯 Đã thêm tham số userId vào đây
               _controller.updateProfileText(
                 userId: _currentUserId, 
                 newName: nameCtrl.text, 
                 newHeadline: headlineCtrl.text, 
                 newBio: bioCtrl.text, 
-                newPhone: phoneCtrl.text, 
                 newLocation: locationCtrl.text
               );
               Navigator.pop(context);
@@ -158,7 +148,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   Positioned(
                                     top: 16, right: 16,
                                     child: IconButton.filled(
-                                      // 🎯 Đã truyền thêm _currentUserId
                                       onPressed: () => _controller.pickAndCropCover(context, _currentUserId),
                                       icon: const Icon(Icons.add_a_photo_rounded, size: 18),
                                       style: IconButton.styleFrom(backgroundColor: Colors.black54),
@@ -182,7 +171,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 Positioned(
                                   bottom: 0, right: 0,
                                   child: GestureDetector(
-                                    // 🎯 Đã truyền thêm _currentUserId
                                     onTap: () => _controller.pickAndCropAvatar(context, _currentUserId),
                                     child: Container(
                                       padding: const EdgeInsets.all(8),
@@ -231,14 +219,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       const SizedBox(height: 32),
 
-                      // --- CÁC NỘI DUNG DƯỚI GIỮ NGUYÊN NHƯ CŨ ---
+                      // --- CÁC NỘI DUNG DƯỚI (ĐÃ BỎ ĐIỆN THOẠI) ---
                       Container(
                         decoration: BoxDecoration(color: surfaceColor, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))]),
                         child: Column(
                           children: [
                             _buildInfoTile(context, Icons.email_outlined, 'Email', _controller.email, subtitleColor, textColor),
-                            const Divider(height: 1, indent: 56, endIndent: 24),
-                            _buildInfoTile(context, Icons.phone_outlined, 'Số điện thoại', _controller.phoneNumber, subtitleColor, textColor),
                             const Divider(height: 1, indent: 56, endIndent: 24),
                             _buildInfoTile(context, Icons.location_on_outlined, 'Vị trí', _controller.location, subtitleColor, textColor),
                             const Divider(height: 1, indent: 56, endIndent: 24),

@@ -4,7 +4,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // Thêm để ghi Tên thật vào Local
 import 'OpenID.dart'; 
 
 enum AuthFormType { login, register, forgotPassword }
@@ -12,10 +11,12 @@ enum AuthFormType { login, register, forgotPassword }
 class AuthController extends ChangeNotifier {
   AuthFormType currentForm = AuthFormType.login;
   
+  // 🎯 TRẠNG THÁI LOADING CHUNG
+  bool isLoading = false;
+
   bool isLoginPassVisible = false;
   bool isRegPassVisible = false;
   bool isRegConfirmPassVisible = false;
-  
   bool isForgotPassVisible = false;
   bool isForgotConfirmPassVisible = false;
 
@@ -32,6 +33,14 @@ class AuthController extends ChangeNotifier {
   final _storage = const FlutterSecureStorage();
   final OpenIDService _openIDService = OpenIDService();
   final String _baseUrl = 'http://localhost:5034/api/auth';
+
+  // ==========================================
+  // HÀM QUẢN LÝ LOADING
+  // ==========================================
+  void _setLoading(bool value) {
+    isLoading = value;
+    notifyListeners();
+  }
 
   // ==========================================
   // ĐIỀU HƯỚNG VÀ HIỂN THỊ UI
@@ -92,77 +101,45 @@ class AuthController extends ChangeNotifier {
   }
 
   // ==========================================
-  // HÀM HỖ TRỢ LƯU THÔNG TIN USER VÀO LOCAL (ĐỂ PROFILE LOAD NHANH)
-  // ==========================================
-  Future<void> _extractAndSaveUserInfoFromToken(String token) async {
-  try {
-    final parts = token.split('.');
-    if (parts.length != 3) return;
-
-    String payloadStr = parts[1];
-    while (payloadStr.length % 4 != 0) {
-      payloadStr += '=';
-    }
-
-    final payload = utf8.decode(base64Url.decode(payloadStr));
-    final payloadMap = jsonDecode(payload);
-
-    final String userId =
-        payloadMap['nameid'] ??
-        payloadMap['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'] ??
-        "guest";
-
-    final String fullName =
-        payloadMap['fullname'] ??
-        payloadMap['name'] ??
-        payloadMap['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name'] ??
-        "Người dùng";
-
-    final prefs = await SharedPreferences.getInstance();
-
-    // Chỉ lưu khi lấy được tên thật
-    if (fullName.isNotEmpty && fullName != "Người dùng") {
-      await prefs.setString('${userId}_name', fullName);
-    }
-  } catch (e) {
-    debugPrint("Lỗi khi giải mã JWT Token: $e");
-  }
-}
-
-  // ==========================================
   // LUỒNG ĐĂNG KÝ 3 BƯỚC
   // ==========================================
   Future<String?> checkEmailAndSendOTP(String email) async {
     if (email.isEmpty || !email.contains('@')) return "Email không hợp lệ!";
+    _setLoading(true);
     try {
       final response = await http.post(Uri.parse('$_baseUrl/send-otp'), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'email': email}));
+      _setLoading(false);
       if (response.statusCode == 200) {
         regEmail = email; registerStep = 2; _startOtpTimer(); notifyListeners(); return null; 
       } else {
         return jsonDecode(response.body)['message'] ?? "Lỗi không xác định";
       }
-    } catch (e) { return "Lỗi kết nối máy chủ!"; }
+    } catch (e) { _setLoading(false); return "Lỗi kết nối máy chủ!"; }
   }
 
   Future<String?> verifyOTP(String otp) async {
     if (otp.length != 6) return "OTP phải đủ 6 số!";
     if (otpTimeLeft == 0) return "Mã OTP đã hết hạn!";
+    _setLoading(true);
     try {
       final response = await http.post(Uri.parse('$_baseUrl/verify-otp'), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'email': regEmail, 'otp': otp}));
+      _setLoading(false);
       if (response.statusCode == 200) {
         _stopOtpTimer(); registerStep = 3; notifyListeners(); return null; 
       } else {
         return jsonDecode(response.body)['message'] ?? "Mã OTP không chính xác!";
       }
-    } catch (e) { return "Lỗi kết nối máy chủ!"; }
+    } catch (e) { _setLoading(false); return "Lỗi kết nối máy chủ!"; }
   }
 
   Future<String?> completeRegistration(String fullName, String password) async {
+    _setLoading(true);
     try {
       final response = await http.post(Uri.parse('$_baseUrl/register'), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'fullName': fullName, 'email': regEmail, 'password': password}));
+      _setLoading(false);
       if (response.statusCode == 200) { _resetRegisterFlow(); return null; } 
       else { return jsonDecode(response.body)['message'] ?? "Lỗi tạo tài khoản!"; }
-    } catch (e) { return "Lỗi kết nối máy chủ!"; }
+    } catch (e) { _setLoading(false); return "Lỗi kết nối máy chủ!"; }
   }
 
   // ==========================================
@@ -170,70 +147,80 @@ class AuthController extends ChangeNotifier {
   // ==========================================
   Future<String?> requestForgotPasswordOTP(String email) async {
     if (email.isEmpty || !email.contains('@')) return "Email không hợp lệ!";
+    _setLoading(true);
     try {
       final response = await http.post(Uri.parse('$_baseUrl/forgot-password-otp'), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'email': email}));
+      _setLoading(false);
       if (response.statusCode == 200) {
         forgotEmail = email; forgotStep = 2; _startForgotOtpTimer(); notifyListeners(); return null;
       } else {
         return jsonDecode(response.body)['message'] ?? "Lỗi không xác định";
       }
-    } catch (e) { return "Lỗi kết nối máy chủ!"; }
+    } catch (e) { _setLoading(false); return "Lỗi kết nối máy chủ!"; }
   }
 
   Future<String?> verifyForgotOTP(String otp) async {
     if (otp.length != 6) return "OTP phải đủ 6 số!";
     if (forgotOtpTimeLeft == 0) return "Mã OTP đã hết hạn!";
+    _setLoading(true);
     try {
       final response = await http.post(Uri.parse('$_baseUrl/verify-forgot-otp'), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'email': forgotEmail, 'otp': otp}));
+      _setLoading(false);
       if (response.statusCode == 200) {
         _stopForgotOtpTimer(); forgotStep = 3; notifyListeners(); return null;
       } else {
         return jsonDecode(response.body)['message'] ?? "Mã OTP không chính xác!";
       }
-    } catch (e) { return "Lỗi kết nối máy chủ!"; }
+    } catch (e) { _setLoading(false); return "Lỗi kết nối máy chủ!"; }
   }
 
   Future<String?> updateNewPassword(String newPassword) async {
+    _setLoading(true);
     try {
       final response = await http.post(Uri.parse('$_baseUrl/reset-password'), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'email': forgotEmail, 'password': newPassword}));
+      _setLoading(false);
       if (response.statusCode == 200) { _resetForgotFlow(); return null; }
       else { return jsonDecode(response.body)['message'] ?? "Lỗi đổi mật khẩu!"; }
-    } catch (e) { return "Lỗi kết nối máy chủ!"; }
+    } catch (e) { _setLoading(false); return "Lỗi kết nối máy chủ!"; }
   }
 
   // ==========================================
   // LOGIN & CÁC HÀM KHÁC
   // ==========================================
   Future<bool> login(String email, String password) async {
-    if (email == '1' && password == '1') { await _storage.write(key: 'jwt_token', value: 'dev_test_token_12345'); return true; }
+    _setLoading(true);
+    
+    // 🎯 PHỤC HỒI CHỨC NĂNG ĐĂNG NHẬP NHANH BẰNG "1" - "1"
+    if (email == '1' && password == '1') { 
+      await Future.delayed(const Duration(seconds: 1)); // Giả lập loading xíu cho mượt
+      await _storage.write(key: 'jwt_token', value: 'dev_test_token_12345'); 
+      _setLoading(false);
+      return true; 
+    }
+
     try {
       final response = await http.post(Uri.parse('$_baseUrl/login'), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'email': email, 'password': password}));
+      _setLoading(false);
       if (response.statusCode == 200) {
         String token = jsonDecode(response.body)['token'];
         await _storage.write(key: 'jwt_token', value: token);
-        
-        // 🎯 Lấy Tên thật từ token và cập nhật thẳng xuống Local Storage
-        await _extractAndSaveUserInfoFromToken(token);
-        
         return true;
       } else { 
         debugPrint(jsonDecode(response.body)['message']);
         return false; 
       }
-    } catch (e) { return false; }
+    } catch (e) { _setLoading(false); return false; }
   }
 
   Future<bool> loginWithGoogle() async {
+    _setLoading(true);
     try {
       String? jwtToken = await _openIDService.signInWithGoogle();
+      _setLoading(false);
       if (jwtToken == null || jwtToken.isEmpty) return false;
       await _storage.write(key: 'jwt_token', value: jwtToken);
-      
-      // 🎯 Lấy Tên thật từ Google JWT và cập nhật xuống Local Storage
-      await _extractAndSaveUserInfoFromToken(jwtToken);
-      
       return true;
-    } catch (e) { return false; }
+    } catch (e) { _setLoading(false); return false; }
   }
 
   Future<void> logout() async {

@@ -1,9 +1,14 @@
-// Đường dẫn: lib/features/settings/screens/settings_screen.dart (Khuyến nghị đổi tên file thường)
+// Đường dẫn: lib/features/settings/screens/settings_screen.dart
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../../../core/theme/theme_controller.dart'; 
 import '../settings/settings_controller.dart'; 
 import '../auth/AuthController.dart'; 
 import '../auth/LoginScreen.dart'; 
+
+// 🎯 THÊM 2 IMPORT NÀY ĐỂ KẾT NỐI VỚI PROFILE
+import '../profile/ProfileController.dart'; 
+import '../profile/ProfileScreen.dart'; 
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -14,17 +19,32 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final SettingsController _controller = SettingsController();
+  
+  // 🎯 GỌI PROFILE CONTROLLER (Vì là Singleton nên nó dùng chung Data với ProfileScreen)
+  final ProfileController _profileController = ProfileController();
 
   @override
   void initState() {
     super.initState();
-    // Tự động quét ID User và load trạng thái Nút gạt mà không cần truyền biến vào Constructor nữa
     _initSettings();
   }
 
   Future<void> _initSettings() async {
     String userId = await AuthController().getCurrentUserId();
     await _controller.loadSettingsForUser(userId);
+    // Tự động load luôn thông tin Profile để đắp lên UI
+    await _profileController.loadUserProfile(userId);
+  }
+
+  // 🎯 HÀM LẤY AVATAR (Ưu tiên ảnh Local -> Ảnh Google -> Icon mặc định)
+  ImageProvider _getAvatarImage() {
+    if (_profileController.localAvatarBytes != null) {
+      return MemoryImage(_profileController.localAvatarBytes!); 
+    } else if (_profileController.avatarUrl.isNotEmpty) {
+      return NetworkImage(_profileController.avatarUrl); 
+    } else {
+      return MemoryImage(Uint8List(0)); 
+    }
   }
 
   void _showColorPicker() {
@@ -37,10 +57,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             return AlertDialog(
               backgroundColor: Theme.of(context).colorScheme.surface,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              title: Text(
-                'Chọn màu chủ đạo',
-                style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.bold),
-              ),
+              title: Text('Chọn màu chủ đạo', style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.bold)),
               content: SizedBox(
                 width: 320,
                 child: Wrap(
@@ -61,9 +78,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             color: color,
                             shape: BoxShape.circle,
                             border: isSelected ? Border.all(color: Theme.of(context).colorScheme.onSurface, width: 3) : null,
-                            boxShadow: [
-                              if (isSelected) BoxShadow(color: color.withValues(alpha: 0.4), blurRadius: 8, offset: const Offset(0, 4))
-                            ],
+                            boxShadow: [if (isSelected) BoxShadow(color: color.withValues(alpha: 0.4), blurRadius: 8, offset: const Offset(0, 4))],
                           ),
                         ),
                       ),
@@ -72,10 +87,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
               actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text('Đóng', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)),
-                ),
+                TextButton(onPressed: () => Navigator.pop(context), child: Text('Đóng', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold))),
               ],
             );
           },
@@ -103,18 +115,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               // ==========================================
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-                decoration: BoxDecoration(
-                  color: surfaceColor,
-                  border: Border(bottom: BorderSide(color: Colors.grey.withValues(alpha: 0.2))),
-                ),
+                decoration: BoxDecoration(color: surfaceColor, border: Border(bottom: BorderSide(color: Colors.grey.withValues(alpha: 0.2)))),
                 child: Row(
                   children: [
                     Icon(Icons.settings_rounded, size: 28, color: textColor),
                     const SizedBox(width: 16),
-                    Text(
-                      'Cài đặt & Quản lý',
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: textColor),
-                    ),
+                    Text('Cài đặt & Quản lý', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: textColor)),
                   ],
                 ),
               ),
@@ -132,50 +138,68 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           
-                          // 1. KHU VỰC HỒ SƠ CAO CẤP
-                          Container(
-                            padding: const EdgeInsets.all(24),
-                            decoration: BoxDecoration(
-                              color: surfaceColor,
-                              borderRadius: BorderRadius.circular(20),
-                              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))],
-                            ),
-                            child: Row(
-                              children: [
-                                Stack(
-                                  children: [
-                                    const CircleAvatar(radius: 40, backgroundImage: NetworkImage('https://i.pravatar.cc/150?img=11')),
-                                    Positioned(
-                                      right: 0, bottom: 0,
-                                      child: Container(
-                                        padding: const EdgeInsets.all(4),
-                                        decoration: BoxDecoration(color: primaryColor, shape: BoxShape.circle, border: Border.all(color: surfaceColor, width: 2)),
-                                        child: const Icon(Icons.camera_alt_rounded, size: 14, color: Colors.white),
-                                      ),
-                                    )
-                                  ],
-                                ),
-                                const SizedBox(width: 20),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text('Nam Pro Coder', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor)),
-                                      const SizedBox(height: 4),
-                                      Text('+84 987 654 321  •  @nam_pro', style: TextStyle(color: textColor.withValues(alpha: 0.6), fontSize: 14)),
-                                      const SizedBox(height: 4),
-                                      Text('Đang cày code xuyên màn đêm 💻', style: TextStyle(color: primaryColor, fontStyle: FontStyle.italic)),
-                                    ],
+                          // ==========================================
+                          // 1. KHU VỰC HỒ SƠ CAO CẤP (ĐÃ ĐỒNG BỘ)
+                          // ==========================================
+                          ListenableBuilder(
+                            listenable: _profileController, // Lắng nghe sự thay đổi từ Profile
+                            builder: (context, child) {
+                              return Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(20),
+                                  // 🎯 BẤM VÀO ĐÂY LÀ NHẢY SANG TRANG PROFILE
+                                  onTap: () {
+                                    Navigator.push(context, MaterialPageRoute(builder: (context) => const ProfileScreen()));
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.all(24),
+                                    decoration: BoxDecoration(
+                                      color: surfaceColor,
+                                      borderRadius: BorderRadius.circular(20),
+                                      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))],
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Stack(
+                                          children: [
+                                            // 🎯 AVATAR ĐỒNG BỘ TỪ DATA
+                                            CircleAvatar(
+                                              radius: 40, 
+                                              backgroundColor: Colors.grey[300],
+                                              backgroundImage: _getAvatarImage(),
+                                              child: (_profileController.localAvatarBytes == null && _profileController.avatarUrl.isEmpty) ? Icon(Icons.person_rounded, size: 40, color: Colors.grey[600]) : null,
+                                            ),
+                                            Positioned(
+                                              right: 0, bottom: 0,
+                                              child: Container(
+                                                padding: const EdgeInsets.all(4),
+                                                decoration: BoxDecoration(color: primaryColor, shape: BoxShape.circle, border: Border.all(color: surfaceColor, width: 2)),
+                                                child: const Icon(Icons.edit_rounded, size: 14, color: Colors.white),
+                                              ),
+                                            )
+                                          ],
+                                        ),
+                                        const SizedBox(width: 20),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              // 🎯 TÊN ĐỒNG BỘ TỪ DATA
+                                              Text(_profileController.fullName, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor)),
+                                              const SizedBox(height: 4),
+                                              // 🎯 EMAIL/SĐT ĐỒNG BỘ TỪ DATA
+                                              Text(_profileController.headline, style: TextStyle(color: primaryColor, fontStyle: FontStyle.italic), overflow: TextOverflow.ellipsis),
+                                            ],
+                                          ),
+                                        ),
+                                        const Icon(Icons.chevron_right_rounded, color: Colors.grey, size: 30),
+                                      ],
+                                    ),
                                   ),
                                 ),
-                                FilledButton.icon(
-                                  onPressed: () {},
-                                  icon: const Icon(Icons.edit_rounded, size: 16),
-                                  label: const Text('Chỉnh sửa'),
-                                  style: FilledButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                                )
-                              ],
-                            ),
+                              );
+                            }
                           ),
                           const SizedBox(height: 32),
 
@@ -185,22 +209,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             _buildNavigationTile(Icons.wallpaper_rounded, 'Hình nền đoạn chat', 'Tùy chỉnh ảnh nền cho các cuộc trò chuyện', onTap: () {}),
                             const Divider(height: 1, indent: 56, endIndent: 16),
                             _buildNavigationTile(Icons.text_fields_rounded, 'Kích thước văn bản', 'Trung bình', onTap: () {}),
-                            const Divider(height: 1, indent: 56, endIndent: 16),
-                            _buildSwitchTile(Icons.keyboard_return_rounded, 'Gửi bằng Enter', 'Nhấn phím Enter để gửi tin nhắn thay vì xuống dòng', 
-                              _controller.enterToSend, (val) => _controller.toggleEnterToSend(val)),
                           ]),
                           const SizedBox(height: 32),
 
                           // 3. QUYỀN RIÊNG TƯ & BẢO MẬT
                           _buildSectionHeader('Quyền riêng tư & Bảo mật'),
                           _buildSettingsGroup(surfaceColor, [
-                            _buildSwitchTile(Icons.remove_red_eye_outlined, 'Hiển thị "Đã xem"', 'Người khác sẽ thấy khi bạn đã đọc tin nhắn của họ', 
-                              _controller.readReceipts, (val) => _controller.toggleReadReceipts(val)),
+                            _buildSwitchTile(Icons.remove_red_eye_outlined, 'Hiển thị "Đã xem"', 'Người khác sẽ thấy khi bạn đã đọc tin nhắn của họ', _controller.readReceipts, (val) => _controller.toggleReadReceipts(val)),
                             const Divider(height: 1, indent: 56, endIndent: 16),
                             _buildNavigationTile(Icons.block_rounded, 'Danh sách chặn', 'Quản lý những người bạn đã chặn', onTap: () {}),
                             const Divider(height: 1, indent: 56, endIndent: 16),
-                            _buildSwitchTile(Icons.lock_outline_rounded, 'Khóa ứng dụng', 'Yêu cầu mật khẩu khi mở ứng dụng', 
-                              _controller.appLock, (val) => _controller.toggleAppLock(val)),
+                            _buildSwitchTile(Icons.lock_outline_rounded, 'Khóa ứng dụng', 'Yêu cầu mật khẩu khi mở ứng dụng', _controller.appLock, (val) => _controller.toggleAppLock(val)),
                           ]),
                           const SizedBox(height: 32),
 
@@ -209,8 +228,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           _buildSettingsGroup(surfaceColor, [
                             _buildNavigationTile(Icons.data_usage_rounded, 'Mức sử dụng dung lượng', 'Chiếm 2.4 GB trên máy tính', onTap: () {}),
                             const Divider(height: 1, indent: 56, endIndent: 16),
-                            _buildSwitchTile(Icons.download_for_offline_rounded, 'Tự động tải phương tiện', 'Tự động lưu ảnh và file đính kèm vào máy tính', 
-                              _controller.autoDownload, (val) => _controller.toggleAutoDownload(val)),
+                            _buildSwitchTile(Icons.download_for_offline_rounded, 'Tự động tải phương tiện', 'Tự động lưu ảnh và file đính kèm vào máy', _controller.autoDownload, (val) => _controller.toggleAutoDownload(val)),
                             const Divider(height: 1, indent: 56, endIndent: 16),
                             _buildNavigationTile(Icons.cleaning_services_rounded, 'Xóa bộ nhớ đệm (Cache)', 'Giải phóng dung lượng rác', iconColor: Colors.orange, onTap: () {}),
                           ]),
@@ -224,7 +242,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               _controller.saveDarkMode(val);
                             }),
                             const Divider(height: 1, indent: 56, endIndent: 16),
-                            
                             Padding(
                               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                               child: Row(
@@ -239,30 +256,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                         return MouseRegion(
                                           cursor: SystemMouseCursors.click,
                                           child: GestureDetector(
-                                            onTap: () {
-                                              themeController.changePrimaryColor(color);
-                                              _controller.savePrimaryColor(color);
-                                            },
-                                            child: Container(
-                                              margin: const EdgeInsets.only(left: 8), width: 28, height: 28,
-                                              decoration: BoxDecoration(color: color, shape: BoxShape.circle, border: isSelected ? Border.all(color: textColor, width: 2) : null),
-                                            ),
+                                            onTap: () { themeController.changePrimaryColor(color); _controller.savePrimaryColor(color); },
+                                            child: Container(margin: const EdgeInsets.only(left: 8), width: 28, height: 28, decoration: BoxDecoration(color: color, shape: BoxShape.circle, border: isSelected ? Border.all(color: textColor, width: 2) : null)),
                                           ),
                                         );
                                       }),
-                                      
                                       MouseRegion(
                                         cursor: SystemMouseCursors.click,
                                         child: GestureDetector(
                                           onTap: _showColorPicker,
                                           child: Container(
                                             margin: const EdgeInsets.only(left: 12), width: 28, height: 28,
-                                            decoration: BoxDecoration(
-                                              shape: BoxShape.circle,
-                                              gradient: const SweepGradient(colors: [Colors.red, Colors.yellow, Colors.green, Colors.blue, Colors.purple, Colors.red]),
-                                              border: themeController.primaryColor != const Color(0xFF8470FF) && themeController.primaryColor != const Color(0xFF00C853) && themeController.primaryColor != const Color(0xFF2979FF) ? Border.all(color: textColor, width: 2) : null,
-                                              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 4)],
-                                            ),
+                                            decoration: BoxDecoration(shape: BoxShape.circle, gradient: const SweepGradient(colors: [Colors.red, Colors.yellow, Colors.green, Colors.blue, Colors.purple, Colors.red]), border: themeController.primaryColor != const Color(0xFF8470FF) && themeController.primaryColor != const Color(0xFF00C853) && themeController.primaryColor != const Color(0xFF2979FF) ? Border.all(color: textColor, width: 2) : null, boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 4)]),
                                           ),
                                         ),
                                       )
@@ -277,11 +282,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           // 6. THÔNG BÁO & ÂM THANH
                           _buildSectionHeader('Thông báo & Âm thanh'),
                           _buildSettingsGroup(surfaceColor, [
-                            _buildSwitchTile(Icons.notifications_active_outlined, 'Cho phép thông báo', 'Hiển thị thông báo khi có tin nhắn mới', 
-                              _controller.notifications, (val) => _controller.toggleNotifications(val)),
+                            _buildSwitchTile(Icons.notifications_active_outlined, 'Cho phép thông báo', 'Hiển thị thông báo khi có tin nhắn mới', _controller.notifications, (val) => _controller.toggleNotifications(val)),
                             const Divider(height: 1, indent: 56, endIndent: 16),
-                            _buildSwitchTile(Icons.volume_up_outlined, 'Âm thanh', 'Phát âm thanh khi gửi và nhận tin', 
-                              _controller.sound, (val) => _controller.toggleSound(val)),
+                            _buildSwitchTile(Icons.volume_up_outlined, 'Âm thanh', 'Phát âm thanh khi gửi và nhận tin', _controller.sound, (val) => _controller.toggleSound(val)),
                           ]),
                           const SizedBox(height: 32),
 
@@ -297,11 +300,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 final authController = AuthController();
                                 await authController.logout();
                                 if (mounted) {
-                                  Navigator.pushAndRemoveUntil(
-                                    context, 
-                                    MaterialPageRoute(builder: (context) => const LoginScreen()), 
-                                    (route) => false,
-                                  );
+                                  Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const LoginScreen()), (route) => false);
                                 }
                               }
                             ),

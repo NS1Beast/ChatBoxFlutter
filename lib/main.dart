@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:desktop_webview_window/desktop_webview_window.dart';
-// Import theo chuẩn Absolute Path (Đảm bảo 100% không bị lú class)
 import 'package:chatapp/core/theme/AppTheme.dart';
 import 'package:chatapp/core/theme/theme_controller.dart';
 import 'package:chatapp/features/auth/LoginScreen.dart';
@@ -50,7 +49,6 @@ class ChatAppDesktop extends StatelessWidget {
             isDark: true,
           ),
           themeMode: themeController.themeMode,
-          // Đã xóa chữ 'auth.' dư thừa, gọi thẳng Widget LoginScreen
           home: const LoginScreen(), 
         );
       },

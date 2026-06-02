@@ -12,10 +12,13 @@ class ContactsScreen extends StatefulWidget {
 class _ContactsScreenState extends State<ContactsScreen> {
   final ContactsController _controller = ContactsController();
   final ScrollController _scrollController = ScrollController();
+  final TextEditingController _searchCtrl = TextEditingController();
 
   @override
   void dispose() {
     _scrollController.dispose();
+    _searchCtrl.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
@@ -55,7 +58,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                               Text('Danh bạ', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: textColor)),
                               IconButton(
                                 icon: Icon(Icons.person_add_alt_1_rounded, color: primaryColor),
-                                onPressed: () {}, // Gọi logic Thêm bạn/nhóm
+                                onPressed: () {}, // TODO: Tính năng tạo nhóm
                                 tooltip: 'Thêm liên hệ',
                               )
                             ],
@@ -78,9 +81,12 @@ class _ContactsScreenState extends State<ContactsScreen> {
                           const SizedBox(height: 16),
                           // Search Bar
                           TextField(
-                            onChanged: _controller.updateSearch,
+                            controller: _searchCtrl,
+                            onChanged: _controller.updateSearch, 
+                            onSubmitted: (email) => _controller.searchGlobalUser(context, email), // Bấm Enter tìm Global
                             decoration: InputDecoration(
-                              hintText: 'Tìm kiếm...',
+                              hintText: 'Nhập Email để tìm...',
+                              hintStyle: TextStyle(fontSize: 13, color: textColor.withValues(alpha: 0.5)),
                               prefixIcon: Icon(Icons.search, color: textColor.withValues(alpha: 0.5)),
                               filled: true,
                               fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
@@ -94,14 +100,17 @@ class _ContactsScreenState extends State<ContactsScreen> {
 
                     // List View kèm Scrollbar tàng hình
                     Expanded(
-                      child: RawScrollbar(
+                      // 🎯 SỬA LỖI Ở ĐÂY: Gọi thẳng .isLoading thay vì .apiController
+                      child: _controller.isLoading 
+                      ? const Center(child: CircularProgressIndicator())
+                      : RawScrollbar(
                         controller: _scrollController,
                         thumbColor: textColor.withValues(alpha: 0.15),
                         radius: const Radius.circular(8),
                         thickness: 4,
                         child: _controller.currentTab == 0
                             ? _buildFriendsList(textColor, primaryColor)
-                            : _buildGroupsList(textColor, primaryColor),
+                            : Center(child: Text("Tính năng Nhóm đang phát triển", style: TextStyle(color: textColor.withValues(alpha: 0.5)))),
                       ),
                     ),
                   ],
@@ -116,7 +125,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                   color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.1),
                   child: _controller.currentTab == 0
                       ? _buildFriendDetails(textColor, primaryColor, surfaceColor)
-                      : _buildGroupDetails(textColor, primaryColor, surfaceColor),
+                      : const SizedBox.shrink(),
                 ),
               ),
             ],
@@ -155,13 +164,20 @@ class _ContactsScreenState extends State<ContactsScreen> {
   }
 
   Widget _buildFriendsList(Color textColor, Color primaryColor) {
+    if (_controller.filteredFriends.isEmpty) {
+      return Center(child: Text("Không có liên hệ nào.\nTìm bằng Email để kết bạn!", textAlign: TextAlign.center, style: TextStyle(color: textColor.withValues(alpha: 0.5))));
+    }
+
     return ListView.builder(
       controller: _scrollController,
       itemCount: _controller.filteredFriends.length,
       itemBuilder: (context, index) {
         final friend = _controller.filteredFriends[index];
-        final isSelected = _controller.selectedFriend?.id == friend.id;
+        final isSelected = _controller.selectedFriend?['id'] == friend['id'];
         
+        String avatarUrl = (friend['avatarUrl'] == null || friend['avatarUrl'] == "") 
+                         ? 'https://i.pravatar.cc/150?u=${friend['id']}' : friend['avatarUrl'];
+
         return Container(
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2), 
           child: ListTile(
@@ -169,56 +185,10 @@ class _ContactsScreenState extends State<ContactsScreen> {
             selectedTileColor: primaryColor.withValues(alpha: 0.1),
             hoverColor: textColor.withValues(alpha: 0.05),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), 
-            leading: Stack(
-              children: [
-                CircleAvatar(backgroundImage: NetworkImage(friend.avatarUrl)),
-                if (friend.isOnline)
-                  Positioned(
-                    right: 0, bottom: 0,
-                    child: Container(
-                      width: 12, height: 12,
-                      decoration: BoxDecoration(
-                        color: Colors.green, shape: BoxShape.circle,
-                        border: Border.all(color: Theme.of(context).colorScheme.surface, width: 2),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            title: Text(friend.name, style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: textColor)),
-            subtitle: Text(friend.isOnline ? 'Trực tuyến' : 'Ngoại tuyến', style: TextStyle(color: friend.isOnline ? Colors.green : textColor.withValues(alpha: 0.5), fontSize: 12)),
+            leading: CircleAvatar(backgroundImage: NetworkImage(avatarUrl)),
+            title: Text(friend['name'] ?? 'Bạn bè', style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: textColor)),
+            subtitle: Text(friend['bio'] ?? 'Chưa có tiểu sử', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: textColor.withValues(alpha: 0.5), fontSize: 12)),
             onTap: () => _controller.selectFriend(friend),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildGroupsList(Color textColor, Color primaryColor) {
-    return ListView.builder(
-      controller: _scrollController,
-      itemCount: _controller.filteredGroups.length,
-      itemBuilder: (context, index) {
-        final group = _controller.filteredGroups[index];
-        final isSelected = _controller.selectedGroup?.id == group.id;
-        
-        return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-          child: ListTile(
-            selected: isSelected,
-            selectedTileColor: primaryColor.withValues(alpha: 0.1),
-            hoverColor: textColor.withValues(alpha: 0.05),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            leading: Container(
-              width: 40, height: 40,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(10),
-                image: DecorationImage(image: NetworkImage(group.avatarUrl), fit: BoxFit.cover),
-              ),
-            ),
-            title: Text(group.name, style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: textColor)),
-            subtitle: Text('${group.memberCount} thành viên', style: TextStyle(color: textColor.withValues(alpha: 0.5), fontSize: 12)),
-            onTap: () => _controller.selectGroup(group),
           ),
         );
       },
@@ -238,13 +208,16 @@ class _ContactsScreenState extends State<ContactsScreen> {
           children: [
             Icon(Icons.person_search_rounded, size: 80, color: textColor.withValues(alpha: 0.2)),
             const SizedBox(height: 16),
-            Text('Chọn một người bạn để xem chi tiết', style: TextStyle(color: textColor.withValues(alpha: 0.5))),
+            Text('Chọn một người bạn hoặc nhập Email để tìm kiếm', style: TextStyle(color: textColor.withValues(alpha: 0.5))),
           ],
         ),
       );
     }
 
-    // Giao diện chi tiết người dùng
+    String displayAvatar = (friend['avatarUrl'] == null || friend['avatarUrl'] == "") 
+                         ? 'https://i.pravatar.cc/150?u=${friend['id']}' : friend['avatarUrl'];
+    bool isFriend = friend['isFriend'] ?? true;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(40),
       child: Center(
@@ -254,22 +227,38 @@ class _ContactsScreenState extends State<ContactsScreen> {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               // 1. Header (Avatar + Tên)
-              CircleAvatar(radius: 60, backgroundImage: NetworkImage(friend.avatarUrl)),
+              CircleAvatar(radius: 60, backgroundImage: NetworkImage(displayAvatar)),
               const SizedBox(height: 24),
-              Text(friend.name, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold, color: textColor)),
+              Text(friend['name'] ?? 'Người dùng', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold, color: textColor)),
               const SizedBox(height: 8),
-              Text(friend.bio, style: TextStyle(color: primaryColor, fontSize: 15, fontStyle: FontStyle.italic)),
+              Text(friend['bio'] ?? 'Chưa có thông tin giới thiệu', style: TextStyle(color: primaryColor, fontSize: 15, fontStyle: FontStyle.italic)),
               const SizedBox(height: 32),
               
-              // 2. Action Buttons
+              // 2. Action Buttons (Kết bạn / Nhắn tin / Gọi)
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _HoverableActionCard(icon: Icons.chat_bubble_rounded, label: 'Nhắn tin', primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor, onTap: (){}),
-                  const SizedBox(width: 16),
-                  _HoverableActionCard(icon: Icons.call_rounded, label: 'Gọi thoại', primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor, onTap: (){}),
-                  const SizedBox(width: 16),
-                  _HoverableActionCard(icon: Icons.videocam_rounded, label: 'Gọi video', primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor, onTap: (){}),
+                  // 🎯 Nút KẾT BẠN (Sửa lỗi Void Callback)
+                  _HoverableActionCard(
+                    icon: isFriend ? Icons.person_remove_rounded : Icons.person_add_rounded, 
+                    label: isFriend ? 'Hủy kết bạn' : 'Thêm bạn', 
+                    primaryColor: isFriend ? Colors.redAccent : primaryColor, 
+                    surfaceColor: surfaceColor, textColor: textColor, 
+                    onTap: () async {
+                      // Gọi hàm dành riêng cho Panel không cần truyền ID
+                      await _controller.toggleFriendStatusFromPanel();
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(isFriend ? 'Đã hủy kết bạn' : 'Đã thêm vào danh bạ')));
+                      }
+                    }
+                  ),
+                  
+                  if (isFriend) ...[
+                    const SizedBox(width: 16),
+                    _HoverableActionCard(icon: Icons.chat_bubble_rounded, label: 'Nhắn tin', primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor, onTap: (){}),
+                    const SizedBox(width: 16),
+                    _HoverableActionCard(icon: Icons.videocam_rounded, label: 'Gọi video', primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor, onTap: (){}),
+                  ]
                 ],
               ),
               const SizedBox(height: 40),
@@ -280,48 +269,27 @@ class _ContactsScreenState extends State<ContactsScreen> {
                 decoration: BoxDecoration(color: surfaceColor, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))]),
                 child: Column(
                   children: [
-                    _buildInfoTile(Icons.phone_rounded, 'Số điện thoại', friend.phone, textColor, primaryColor),
+                    _buildInfoTile(Icons.info_outline_rounded, 'Bio', friend['bio'] ?? 'Trống', textColor, primaryColor),
                     const Divider(height: 1, indent: 56, endIndent: 16),
-                    _buildInfoTile(Icons.cake_rounded, 'Ngày sinh', '15 tháng 8, 1999', textColor, primaryColor),
-                    const Divider(height: 1, indent: 56, endIndent: 16),
-                    _buildInfoTile(Icons.transgender_rounded, 'Giới tính', 'Nữ', textColor, primaryColor),
+                    _buildInfoTile(Icons.email_outlined, 'Email', friend['email'] ?? 'Ẩn', textColor, primaryColor),
                   ],
                 ),
               ),
               const SizedBox(height: 32),
 
-              // 4. Ảnh chung (Media)
-              _buildInfoSectionHeader('Ảnh & Video chung', textColor),
-              Container(
-                height: 100,
-                width: double.infinity,
-                decoration: BoxDecoration(color: surfaceColor, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))]),
-                padding: const EdgeInsets.all(12),
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: 6,
-                  itemBuilder: (context, index) => Container(
-                    width: 76,
-                    margin: const EdgeInsets.only(right: 8),
-                    decoration: BoxDecoration(borderRadius: BorderRadius.circular(8), image: DecorationImage(image: NetworkImage('https://picsum.photos/seed/${index + 50}/200'), fit: BoxFit.cover)),
+              // 5. Vùng Nguy hiểm (Chặn)
+              if (isFriend) ...[
+                _buildInfoSectionHeader('Tùy chọn', textColor),
+                Container(
+                  decoration: BoxDecoration(color: surfaceColor, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))]),
+                  child: Column(
+                    children: [
+                      _buildActionTile(Icons.block_rounded, 'Chặn người dùng', Colors.orange),
+                    ],
                   ),
                 ),
-              ),
-              const SizedBox(height: 32),
-
-              // 5. Vùng Nguy hiểm (Chặn, Xóa)
-              _buildInfoSectionHeader('Tùy chọn', textColor),
-              Container(
-                decoration: BoxDecoration(color: surfaceColor, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))]),
-                child: Column(
-                  children: [
-                    _buildActionTile(Icons.block_rounded, 'Chặn người dùng', Colors.orange),
-                    const Divider(height: 1, indent: 56, endIndent: 16),
-                    _buildActionTile(Icons.person_remove_rounded, 'Xóa khỏi danh bạ', Colors.redAccent),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 40),
+                const SizedBox(height: 40),
+              ]
             ],
           ),
         ),
@@ -329,103 +297,6 @@ class _ContactsScreenState extends State<ContactsScreen> {
     );
   }
 
-  Widget _buildGroupDetails(Color textColor, Color primaryColor, Color surfaceColor) {
-    final group = _controller.selectedGroup;
-    if (group == null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.group_outlined, size: 80, color: textColor.withValues(alpha: 0.2)),
-            const SizedBox(height: 16),
-            Text('Chọn một nhóm để xem chi tiết', style: TextStyle(color: textColor.withValues(alpha: 0.5))),
-          ],
-        ),
-      );
-    }
-
-    // Giao diện chi tiết Nhóm
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(40),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 600),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              // 1. Header (Avatar + Tên)
-              Container(
-                width: 120, height: 120,
-                decoration: BoxDecoration(borderRadius: BorderRadius.circular(30), image: DecorationImage(image: NetworkImage(group.avatarUrl), fit: BoxFit.cover), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10)]),
-              ),
-              const SizedBox(height: 24),
-              Text(group.name, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold, color: textColor)),
-              const SizedBox(height: 8),
-              Text(group.description, textAlign: TextAlign.center, style: TextStyle(color: textColor.withValues(alpha: 0.6), fontSize: 15)),
-              const SizedBox(height: 32),
-              
-              // 2. Action Buttons
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _HoverableActionCard(icon: Icons.forum_rounded, label: 'Vào Chat', primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor, onTap: (){}),
-                  const SizedBox(width: 16),
-                  _HoverableActionCard(icon: Icons.videocam_rounded, label: 'Gọi Nhóm', primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor, onTap: (){}),
-                  const SizedBox(width: 16),
-                  _HoverableActionCard(icon: Icons.settings_rounded, label: 'Quản lý', primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor, onTap: (){}),
-                ],
-              ),
-              const SizedBox(height: 40),
-
-              // 3. Danh sách thành viên thu gọn
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _buildInfoSectionHeader('Thành viên (${group.memberCount})', textColor),
-                  TextButton(
-                          onPressed: () {},
-                          child: const Text('Xem tất cả'),
-                        ),
-                ],
-              ),
-              Container(
-                decoration: BoxDecoration(color: surfaceColor, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))]),
-                child: Column(
-                  children: List.generate(3, (index) => Column(
-                    children: [
-                      ListTile(
-                        leading: CircleAvatar(backgroundImage: NetworkImage('https://i.pravatar.cc/150?img=${index + 12}')),
-                        title: Text('Thành viên ${index + 1}', style: TextStyle(color: textColor, fontWeight: FontWeight.w600)),
-                        subtitle: index == 0 ? Text('Quản trị viên', style: TextStyle(color: primaryColor, fontSize: 12)) : null,
-                      ),
-                      if (index < 2) const Divider(height: 1, indent: 70, endIndent: 16),
-                    ],
-                  )),
-                ),
-              ),
-              const SizedBox(height: 32),
-
-              // 4. Tùy chọn Nhóm
-              _buildInfoSectionHeader('Tùy chọn', textColor),
-              Container(
-                decoration: BoxDecoration(color: surfaceColor, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))]),
-                child: Column(
-                  children: [
-                    _buildActionTile(Icons.notifications_off_rounded, 'Tắt thông báo nhóm', Colors.orange),
-                    const Divider(height: 1, indent: 56, endIndent: 16),
-                    _buildActionTile(Icons.exit_to_app_rounded, 'Rời khỏi nhóm', Colors.redAccent),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 40),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // --- COMPONENT NHỎ BÊN PHẢI ---
   Widget _buildInfoSectionHeader(String title, Color textColor) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12, left: 8),

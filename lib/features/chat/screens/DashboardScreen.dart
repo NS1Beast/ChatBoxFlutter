@@ -9,7 +9,6 @@ import '../../contacts/ContactsScreen.dart';
 import '../../timeline/TimelineScreen.dart';
 import '../../notifications/NotificationsScreen.dart';
 import '../../profile/ProfileController.dart';
-// THÊM 3 DÒNG NÀY ĐỂ KÍCH HOẠT THEME NGAY KHI VÀO DASHBOARD
 import '../../../core/theme/theme_controller.dart'; 
 import '../../settings/settings_controller.dart'; 
 import '../../auth/AuthController.dart';

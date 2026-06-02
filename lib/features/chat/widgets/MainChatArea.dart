@@ -5,7 +5,9 @@ import '../../call/CallScreen.dart';
 
 import '../models/chat_message.dart';
 import 'HoverableMessageBubble.dart';
-import 'ChatInputArea.dart'; // IMPORT FILE MỚI
+import 'ChatInputArea.dart'; 
+// 🎯 IMPORT THÊM ĐỂ MỞ PROFILE
+import '../../contacts/ContactsController.dart'; 
 
 class MainChatArea extends StatefulWidget {
   const MainChatArea({super.key});
@@ -17,26 +19,35 @@ class MainChatArea extends StatefulWidget {
 class _MainChatAreaState extends State<MainChatArea> {
   final ScrollController _scrollController = ScrollController();
   bool _showInfoPanel = false;
+  
+  // 🎯 KHAI BÁO CONTROLLER TẠI ĐÂY
+  final ContactsController _contactController = ContactsController();
 
-  // ĐÃ XÓA DỮ LIỆU TEST - Khởi tạo danh sách rỗng
   List<ChatMessage> messages = [];
 
   @override
   void dispose() {
     _scrollController.dispose();
+    _contactController.dispose(); // Nhớ giải phóng bộ nhớ
     super.dispose();
   }
 
+  // 🎯 ĐÃ BỔ SUNG ĐỦ THAM SỐ CHO PROFILE CẢI TIẾN
   void _openUserProfile() {
-    Navigator.push(context, MaterialPageRoute(builder: (context) => const FriendProfileScreen(userName: 'Trần Thị B', avatarUrl: 'https://i.pravatar.cc/150?img=20', bio: 'Yêu màu hồng, ghét sự giả dối 🌸', initialIsFriend: true)));
+    Navigator.push(context, MaterialPageRoute(builder: (context) => FriendProfileScreen(
+      userId: 'mock_user_id', // ID tạm thời cho màn hình Chat giả lập
+      userName: 'Trần Thị B', 
+      avatarUrl: 'https://i.pravatar.cc/150?img=20', 
+      bio: 'Yêu màu hồng, ghét sự giả dối 🌸', 
+      initialIsFriend: true,
+      contactController: _contactController, // Truyền Controller vào đây
+    )));
   }
 
-  // --- HÀM HỨNG DỮ LIỆU TỪ CHAT INPUT AREA ---
   void _addMessage(ChatMessage msg) {
     setState(() {
       messages.add(msg);
     });
-    // Tự động cuộn xuống cuối cùng
     Future.delayed(const Duration(milliseconds: 100), () {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(_scrollController.position.maxScrollExtent, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
@@ -67,7 +78,7 @@ class _MainChatAreaState extends State<MainChatArea> {
                 // DANH SÁCH TIN NHẮN
                 Expanded(
                   child: messages.isEmpty 
-                    ? _buildEmptyChatState(textColor) // Nếu chưa có tin nhắn nào
+                    ? _buildEmptyChatState(textColor) 
                     : RawScrollbar(
                         controller: _scrollController,
                         thumbColor: textColor.withValues(alpha: 0.2),
@@ -84,7 +95,6 @@ class _MainChatAreaState extends State<MainChatArea> {
                       ),
                 ),
                 
-                // GỌI KHỐI CHAT INPUT TỪ FILE MỚI
                 ChatInputArea(
                   onSendMessage: (text) {
                     _addMessage(ChatMessage(text: text, isMe: true, time: 'Vừa xong'));
@@ -94,7 +104,6 @@ class _MainChatAreaState extends State<MainChatArea> {
                   },
                   onSendVoice: (duration) {
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Đã gửi tin nhắn thoại ($duration giây)'), behavior: SnackBarBehavior.floating));
-                    // TODO: Xử lý hiển thị UI cho bong bóng ghi âm sau này
                   },
                 ),
               ],
@@ -117,7 +126,6 @@ class _MainChatAreaState extends State<MainChatArea> {
   }
 
   // --- CÁC HÀM UI CỦA MAIN CHAT ---
-  
   Widget _buildEmptyChatState(Color textColor) {
     return Center(
       child: Column(

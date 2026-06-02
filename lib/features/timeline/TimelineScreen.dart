@@ -4,6 +4,8 @@ import 'TimelineController.dart';
 // Import các widget đã làm để tái sử dụng
 import '../chat/widgets/FullScreenImageViewer.dart';
 import '../profile/FriendProfileScreen.dart';
+// 🎯 IMPORT THÊM CONTACTS CONTROLLER
+import '../contacts/ContactsController.dart'; 
 
 class TimelineScreen extends StatefulWidget {
   const TimelineScreen({super.key});
@@ -15,23 +17,29 @@ class TimelineScreen extends StatefulWidget {
 class _TimelineScreenState extends State<TimelineScreen> {
   final TimelineController _controller = TimelineController();
   final ScrollController _scrollController = ScrollController();
+  
+  // 🎯 KHAI BÁO CONTROLLER TẠI ĐÂY
+  final ContactsController _contactController = ContactsController();
 
   @override
   void dispose() {
     _scrollController.dispose();
+    _contactController.dispose(); // Nhớ giải phóng bộ nhớ
     super.dispose();
   }
 
-  // --- HÀM MỞ MÀN HÌNH HỒ SƠ ---
+  // --- HÀM MỞ MÀN HÌNH HỒ SƠ (ĐÃ SỬA THÊM THAM SỐ) ---
   void _openUserProfile(String userName, String avatarUrl) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => FriendProfileScreen(
+          userId: 'mock_timeline_id', // ID tạm thời cho Timeline giả lập
           userName: userName,
           avatarUrl: avatarUrl,
           bio: 'Hoạt động năng nổ trên Timeline 🌟',
           initialIsFriend: true, 
+          contactController: _contactController, // Truyền Controller vào
         ),
       ),
     );
@@ -155,7 +163,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
         children: [
           Row(
             children: [
-              const CircleAvatar(radius: 24, backgroundImage: NetworkImage('https://i.pravatar.cc/150?img=11')), // Avatar của User đang đăng nhập
+              const CircleAvatar(radius: 24, backgroundImage: NetworkImage('https://i.pravatar.cc/150?img=11')), 
               const SizedBox(width: 16),
               Expanded(
                 child: Container(
@@ -274,7 +282,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
             padding: const EdgeInsets.symmetric(vertical: 12),
             child: Row(
               children: [
-                Icon(Icons.favorite_rounded, color: Colors.redAccent, size: 16),
+                const Icon(Icons.favorite_rounded, color: Colors.redAccent, size: 16),
                 const SizedBox(width: 4),
                 Text('${post.likes}', style: TextStyle(color: textColor.withValues(alpha: 0.6), fontSize: 13)),
                 const Spacer(),
@@ -300,7 +308,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
                 icon: Icons.chat_bubble_outline_rounded,
                 color: textColor.withValues(alpha: 0.6),
                 label: 'Bình luận',
-                onTap: () {}, // Scroll tới ô comment
+                onTap: () {}, 
               ),
               _buildInteractionButton(
                 icon: Icons.share_rounded,
@@ -315,7 +323,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
           const SizedBox(height: 16),
           Row(
             children: [
-              const CircleAvatar(radius: 16, backgroundImage: NetworkImage('https://i.pravatar.cc/150?img=11')), // Avatar user đăng nhập
+              const CircleAvatar(radius: 16, backgroundImage: NetworkImage('https://i.pravatar.cc/150?img=11')), 
               const SizedBox(width: 12),
               Expanded(
                 child: Container(
@@ -351,14 +359,12 @@ class _TimelineScreenState extends State<TimelineScreen> {
     );
   }
 
-  // Khung render phương tiện (Media)
   Widget _buildMediaContent(dynamic post, Color primaryColor) {
     if (post.mediaType == 'image' || post.mediaType == 'gif') {
       return MouseRegion(
         cursor: SystemMouseCursors.click,
         child: GestureDetector(
           onTap: () {
-            // Gắn Trình xem ảnh toàn màn hình vào đây
             Navigator.push(
               context,
               PageRouteBuilder(

@@ -1,25 +1,12 @@
 // ignore_file: file_names
 import 'package:flutter/material.dart';
 
-class ChatSession {
-  final String id;
-  final String name;
-  final String avatarUrl;
-  final String lastMessage;
-  final String time;
-  final int unreadCount;
-  final bool isOnline;
-
-  ChatSession({
-    required this.id, required this.name, required this.avatarUrl,
-    required this.lastMessage, required this.time, this.unreadCount = 0, this.isOnline = false,
-  });
-}
+// 🎯 Tui đã chỉnh lại đường dẫn lùi 2 cấp (../../) để ra tới mục features, sau đó chui vào profile/contact
+import '../../profile/FriendProfileScreen.dart'; 
+import '../../contacts/ContactsController.dart'; // NẾU VẪN ĐỎ DÒNG NÀY, HÃY XÓA NÓ VÀ DÙNG CTRL + . NHƯ CÁCH 1
 
 class ChatListPanel extends StatefulWidget {
-  // THÊM CALLBACK ĐỂ BÁO RA BÊN NGOÀI
   final Function(String) onChatSelected;
-
   const ChatListPanel({super.key, required this.onChatSelected});
 
   @override
@@ -28,37 +15,70 @@ class ChatListPanel extends StatefulWidget {
 
 class _ChatListPanelState extends State<ChatListPanel> {
   final ScrollController _scrollController = ScrollController();
+  final TextEditingController _searchCtrl = TextEditingController();
   
-  // Mặc định không chọn ai (null)
+  // Nơi khai báo Controller gọi API
+  final ContactsController _contactController = ContactsController();
+  
   String? _selectedChatId;
 
-  final List<ChatSession> _chats = [
-    ChatSession(id: '1', name: 'Trần Thị B', avatarUrl: 'https://i.pravatar.cc/150?img=20', lastMessage: 'Nhìn xịn thật sự, đúng chuẩn Mac!', time: '10:36 AM', isOnline: true),
-    ChatSession(id: '2', name: 'Hội Coder Cú Đêm', avatarUrl: 'https://i.pravatar.cc/150?img=24', lastMessage: 'Ai debug hộ tui cái lỗi này với', time: '09:12 AM', unreadCount: 5),
-    ChatSession(id: '3', name: 'Nguyễn Văn A', avatarUrl: 'https://i.pravatar.cc/150?img=12', lastMessage: 'Ok chốt vậy nha.', time: 'Hôm qua', isOnline: true),
-    ChatSession(id: '4', name: 'Lê Hoàng C', avatarUrl: 'https://i.pravatar.cc/150?img=8', lastMessage: 'Đã gửi một tệp đính kèm.', time: 'Hôm qua'),
-    ChatSession(id: '5', name: 'Dự án AI', avatarUrl: 'https://i.pravatar.cc/150?img=11', lastMessage: 'Deadline tuần sau nha mọi người', time: 'T2', unreadCount: 1),
-    ChatSession(id: '6', name: 'Phạm D', avatarUrl: 'https://i.pravatar.cc/150?img=15', lastMessage: 'Cảm ơn sếp!', time: 'T7'),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    // Vừa mở App là chọc Database tải danh sách bạn bè
+    _contactController.loadFriends();
+    _contactController.addListener(() {
+      if (mounted) setState(() {});
+    });
+  }
 
   @override
   void dispose() {
     _scrollController.dispose();
+    _searchCtrl.dispose();
+    _contactController.dispose();
     super.dispose();
+  }
+
+  // HÀM TÌM KIẾM NGƯỜI DÙNG KHI BẤM ENTER
+  void _performSearch(String query) async {
+    if (query.trim().isEmpty) return;
+    
+    var result = await _contactController.searchUser(query.trim());
+    
+    if (result != null && mounted) {
+      // Tìm thấy -> Mở Profile
+      Navigator.push(context, MaterialPageRoute(
+        builder: (context) => FriendProfileScreen(
+          userId: result['id'], 
+          userName: result['fullName'] ?? 'Người dùng',
+          avatarUrl: result['avatarUrl'] ?? '',
+          bio: result['bio'] ?? 'Chưa có thông tin',
+          initialIsFriend: result['isFriend'],
+          contactController: _contactController, 
+        ),
+      ));
+      _searchCtrl.clear();
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Không tìm thấy người dùng này!')));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final textColor = Theme.of(context).colorScheme.onSurface;
+    final friends = _contactController.friendsList;
 
     return Column(
       children: [
-        // Thanh tìm kiếm
+        // THANH TÌM KIẾM (REAL)
         Padding(
           padding: const EdgeInsets.all(16.0),
           child: TextField(
+            controller: _searchCtrl,
+            onSubmitted: _performSearch, // 🎯 BẤM ENTER ĐỂ TÌM
             decoration: InputDecoration(
-              hintText: 'Tìm kiếm...',
+              hintText: 'Nhập Email để tìm kiếm...',
               hintStyle: TextStyle(color: textColor.withValues(alpha: 0.5)),
               prefixIcon: Icon(Icons.search_rounded, color: textColor.withValues(alpha: 0.5)),
               filled: true,
@@ -69,41 +89,51 @@ class _ChatListPanelState extends State<ChatListPanel> {
           ),
         ),
         
+        // DANH SÁCH BẠN BÈ / CHAT (REAL)
         Expanded(
-          child: RawScrollbar(
-            controller: _scrollController,
-            thumbColor: textColor.withValues(alpha: 0.15),
-            radius: const Radius.circular(8),
-            thickness: 4,
-            child: ListView.builder(
+          child: _contactController.isLoading 
+          ? const Center(child: CircularProgressIndicator())
+          : friends.isEmpty 
+            ? Center(child: Text("Chưa có liên hệ nào.\nHãy tìm kiếm email để kết bạn!", textAlign: TextAlign.center, style: TextStyle(color: textColor.withValues(alpha: 0.5))))
+            : RawScrollbar(
               controller: _scrollController,
-              itemCount: _chats.length,
-              itemBuilder: (context, index) {
-                return _HoverableChatItem(
-                  chat: _chats[index],
-                  isSelected: _selectedChatId == _chats[index].id,
-                  onTap: () {
-                    // Cập nhật giao diện làm sáng danh sách
-                    setState(() => _selectedChatId = _chats[index].id);
-                    // Bắn tín hiệu ra ngoài Dashboard
-                    widget.onChatSelected(_chats[index].id);
-                  },
-                );
-              },
+              thumbColor: textColor.withValues(alpha: 0.15),
+              radius: const Radius.circular(8), thickness: 4,
+              child: ListView.builder(
+                controller: _scrollController,
+                itemCount: friends.length,
+                itemBuilder: (context, index) {
+                  final friend = friends[index];
+                  String avatar = (friend['avatarUrl'] == null || friend['avatarUrl'] == "") 
+                                ? 'https://i.pravatar.cc/150?u=${friend['id']}' 
+                                : friend['avatarUrl'];
+
+                  return _HoverableChatItem(
+                    name: friend['name'] ?? 'Bạn bè',
+                    avatarUrl: avatar,
+                    isSelected: _selectedChatId == friend['id'],
+                    onTap: () {
+                      setState(() => _selectedChatId = friend['id']);
+                      widget.onChatSelected(friend['id']);
+                    },
+                  );
+                },
+              ),
             ),
-          ),
         ),
       ],
     );
   }
 }
 
+// Widget Item
 class _HoverableChatItem extends StatefulWidget {
-  final ChatSession chat;
+  final String name;
+  final String avatarUrl;
   final bool isSelected;
   final VoidCallback onTap;
 
-  const _HoverableChatItem({required this.chat, required this.isSelected, required this.onTap});
+  const _HoverableChatItem({required this.name, required this.avatarUrl, required this.isSelected, required this.onTap});
 
   @override
   State<_HoverableChatItem> createState() => _HoverableChatItemState();
@@ -133,49 +163,10 @@ class _HoverableChatItemState extends State<_HoverableChatItem> {
           ),
           child: Row(
             children: [
-              Stack(
-                children: [
-                  CircleAvatar(radius: 24, backgroundImage: NetworkImage(widget.chat.avatarUrl)),
-                  if (widget.chat.isOnline)
-                    Positioned(
-                      right: 0, bottom: 0,
-                      child: Container(
-                        width: 12, height: 12,
-                        decoration: BoxDecoration(
-                          color: Colors.green, shape: BoxShape.circle,
-                          border: Border.all(color: Theme.of(context).colorScheme.surface, width: 2),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
+              CircleAvatar(radius: 24, backgroundImage: NetworkImage(widget.avatarUrl)),
               const SizedBox(width: 12),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(child: Text(widget.chat.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor))),
-                        Text(widget.chat.time, style: TextStyle(fontSize: 12, color: widget.chat.unreadCount > 0 ? primaryColor : textColor.withValues(alpha: 0.5), fontWeight: widget.chat.unreadCount > 0 ? FontWeight.bold : FontWeight.normal)),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Expanded(child: Text(widget.chat.lastMessage, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, color: widget.chat.unreadCount > 0 ? textColor : textColor.withValues(alpha: 0.6), fontWeight: widget.chat.unreadCount > 0 ? FontWeight.bold : FontWeight.normal))),
-                        if (widget.chat.unreadCount > 0)
-                          Container(
-                            margin: const EdgeInsets.only(left: 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(color: primaryColor, borderRadius: BorderRadius.circular(10)),
-                            child: Text(widget.chat.unreadCount.toString(), style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                          )
-                      ],
-                    ),
-                  ],
-                ),
+                child: Text(widget.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor)),
               ),
             ],
           ),

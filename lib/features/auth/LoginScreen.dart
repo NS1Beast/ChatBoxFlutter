@@ -16,14 +16,12 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
   
-  // Controllers cho Đăng Ký
   final _regEmailCtrl = TextEditingController();
   final _regOtpCtrl = TextEditingController();
   final _regNameCtrl = TextEditingController();
   final _regPassCtrl = TextEditingController();
   final _regConfirmPassCtrl = TextEditingController();
 
-  // Controllers cho Quên Mật Khẩu
   final _forgotEmailCtrl = TextEditingController();
   final _forgotOtpCtrl = TextEditingController();
   final _forgotPassCtrl = TextEditingController();
@@ -49,6 +47,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   // --- HÀM XỬ LÝ LOGIN ---
   void _handleLogin() async {
+    // Không khóa bàn phím, để nguyên cho User xem cái xoay tròn trên nút bấm là đủ
     bool success = await _controller.login(_emailCtrl.text.trim(), _passCtrl.text);
     if (success && mounted) {
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const DashboardScreen()));
@@ -58,13 +57,10 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _handleGoogleAuth() async {
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đang kết nối Google...'), behavior: SnackBarBehavior.floating, duration: Duration(seconds: 2)));
     bool success = await _controller.loginWithGoogle();
     if (success && mounted) {
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const DashboardScreen()));
     } else if (mounted) {
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       _showError('Đăng nhập Google thất bại hoặc đã bị hủy!');
     }
   }
@@ -153,8 +149,11 @@ class _LoginScreenState extends State<LoginScreen> {
         SizedBox(
           width: double.infinity,
           child: OutlinedButton.icon(
-            onPressed: _handleGoogleAuth,
-            icon: const Icon(Icons.g_mobiledata_rounded, size: 32, color: Colors.redAccent),
+            // Khóa nút nếu đang loading
+            onPressed: _controller.isLoading ? null : _handleGoogleAuth,
+            icon: _controller.isLoading 
+                ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.redAccent))
+                : const Icon(Icons.g_mobiledata_rounded, size: 32, color: Colors.redAccent),
             label: const FittedBox(fit: BoxFit.scaleDown, child: Text('Tiếp tục với Google', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
             style: OutlinedButton.styleFrom(
               foregroundColor: textColor, padding: const EdgeInsets.symmetric(vertical: 18), 
@@ -192,9 +191,12 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 24),
               
               FilledButton(
-                onPressed: _handleLogin,
+                // 🎯 KIỂM TRA LOADING ĐỂ KHÓA NÚT VÀ HIỆN VÒNG QUAY
+                onPressed: _controller.isLoading ? null : _handleLogin,
                 style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 20), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), elevation: 5, shadowColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5)),
-                child: const Text('ĐĂNG NHẬP', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+                child: _controller.isLoading 
+                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Text('ĐĂNG NHẬP', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
               ),
               
               _buildSocialLoginSection(textColor),
@@ -250,9 +252,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         _buildTextField(controller: _regEmailCtrl, label: 'Email đăng ký', icon: Icons.email_outlined, keyboardType: TextInputType.emailAddress),
                         const SizedBox(height: 16),
                         FilledButton(
-                          onPressed: _submitRegStep1,
+                          onPressed: _controller.isLoading ? null : _submitRegStep1,
                           style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 20), minimumSize: const Size.fromHeight(60), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-                          child: const Text('GỬI MÃ OTP', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                          child: _controller.isLoading ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('GỬI MÃ OTP', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                         ),
                       ],
 
@@ -261,14 +263,12 @@ class _LoginScreenState extends State<LoginScreen> {
                         Text('Mã 6 số đã được gửi tới:\n${_controller.regEmail}', textAlign: TextAlign.center, style: TextStyle(color: textColor, fontWeight: FontWeight.w500, fontSize: 15)),
                         const SizedBox(height: 24),
                         _buildTextField(controller: _regOtpCtrl, label: 'Mã OTP (6 số)', icon: Icons.message_rounded, keyboardType: TextInputType.number),
-                        
                         Text('Hết hạn sau: ${_controller.otpTimerDisplay}', style: TextStyle(color: _controller.otpTimeLeft <= 30 ? Colors.red : Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold, fontSize: 16)),
                         const SizedBox(height: 24),
-                        
                         FilledButton(
-                          onPressed: _controller.otpTimeLeft > 0 ? _submitRegStep2 : null,
+                          onPressed: (_controller.otpTimeLeft > 0 && !_controller.isLoading) ? _submitRegStep2 : null,
                           style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 20), minimumSize: const Size.fromHeight(60), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-                          child: const Text('XÁC NHẬN MÃ', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                          child: _controller.isLoading ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('XÁC NHẬN MÃ', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                         ),
                       ],
 
@@ -279,9 +279,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         _buildTextField(controller: _regConfirmPassCtrl, label: 'Xác nhận mật khẩu', icon: Icons.lock_reset_outlined, isPassword: true, isPasswordVisible: _controller.isRegConfirmPassVisible, onVisibilityToggle: _controller.toggleRegConfirmPassVisibility),
                         const SizedBox(height: 16),
                         FilledButton(
-                          onPressed: _submitRegStep3,
+                          onPressed: _controller.isLoading ? null : _submitRegStep3,
                           style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 20), minimumSize: const Size.fromHeight(60), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-                          child: const Text('HOÀN TẤT ĐĂNG KÝ', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                          child: _controller.isLoading ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('HOÀN TẤT ĐĂNG KÝ', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                         ),
                       ],
                     ],
@@ -312,7 +312,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // --- GIAO DIỆN QUÊN MẬT KHẨU 3 BƯỚC ---
   Widget _buildForgotPasswordForm(bool isDesktop, Color textColor) {
     return Center(
       child: SingleChildScrollView(
@@ -343,9 +342,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         _buildTextField(controller: _forgotEmailCtrl, label: 'Email đã đăng ký', icon: Icons.email_outlined, keyboardType: TextInputType.emailAddress),
                         const SizedBox(height: 16),
                         FilledButton(
-                          onPressed: _submitForgotStep1,
+                          onPressed: _controller.isLoading ? null : _submitForgotStep1,
                           style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 20), minimumSize: const Size.fromHeight(60), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-                          child: const Text('GỬI MÃ KHÔI PHỤC', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                          child: _controller.isLoading ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('GỬI MÃ KHÔI PHỤC', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                         ),
                       ],
 
@@ -357,9 +356,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         Text('Hết hạn sau: ${_controller.forgotOtpTimerDisplay}', style: TextStyle(color: _controller.forgotOtpTimeLeft <= 30 ? Colors.red : Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold, fontSize: 16)),
                         const SizedBox(height: 24),
                         FilledButton(
-                          onPressed: _controller.forgotOtpTimeLeft > 0 ? _submitForgotStep2 : null,
+                          onPressed: (_controller.forgotOtpTimeLeft > 0 && !_controller.isLoading) ? _submitForgotStep2 : null,
                           style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 20), minimumSize: const Size.fromHeight(60), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-                          child: const Text('XÁC NHẬN MÃ', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                          child: _controller.isLoading ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('XÁC NHẬN MÃ', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                         ),
                       ],
 
@@ -369,9 +368,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         _buildTextField(controller: _forgotConfirmPassCtrl, label: 'Xác nhận mật khẩu mới', icon: Icons.lock_reset_outlined, isPassword: true, isPasswordVisible: _controller.isForgotConfirmPassVisible, onVisibilityToggle: _controller.toggleForgotConfirmPassVisibility),
                         const SizedBox(height: 16),
                         FilledButton(
-                          onPressed: _submitForgotStep3,
+                          onPressed: _controller.isLoading ? null : _submitForgotStep3,
                           style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 20), minimumSize: const Size.fromHeight(60), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-                          child: const Text('ĐỔI MẬT KHẨU', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                          child: _controller.isLoading ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('ĐỔI MẬT KHẨU', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                         ),
                       ],
                     ],

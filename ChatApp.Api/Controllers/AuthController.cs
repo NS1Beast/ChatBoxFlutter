@@ -130,8 +130,6 @@ namespace ChatApp.Api.Controllers
 
             if (user == null)
                 return BadRequest(new { message = "Email hoặc mật khẩu không chính xác!" });
-
-            // 🎯 LƯU Ý: Phải xóa tài khoản cũ đi tạo lại để xài chuẩn BCrypt, nếu không nó sẽ báo lỗi chỗ này!
             bool isPasswordValid = BCrypt.Net.BCrypt.Verify(request.Password, user.Passwordhash);
 
             if (!isPasswordValid)
