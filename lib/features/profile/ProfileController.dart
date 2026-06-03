@@ -7,11 +7,15 @@ import 'package:image_cropper/image_cropper.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 // ignore: depend_on_referenced_packages
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http; 
 
 class ProfileController extends ChangeNotifier {
   static final ProfileController _instance = ProfileController._internal();
   factory ProfileController() => _instance;
   ProfileController._internal();
+
+  // --- KẾT NỐI API BACKEND ---
+  final String _usersApiUrl = 'http://localhost:5034/api/users';
 
   // --- STATE DỮ LIỆU ---
   String coverImageUrl = ''; 
@@ -40,43 +44,40 @@ class ProfileController extends ChangeNotifier {
   // ==========================================
   Future<void> loadUserProfile(String userId) async {
     final prefs = await SharedPreferences.getInstance();
-    
     String? localCustomName = prefs.getString('${userId}_name');
-    const storage = FlutterSecureStorage();
-    String? token = await storage.read(key: 'jwt_token');
 
-    if (token != null && token.isNotEmpty) {
-      try {
-        final parts = token.split('.');
-        if (parts.length == 3) {
-          String payloadStr = parts[1];
-          while (payloadStr.length % 4 != 0) { payloadStr += '='; }
-          final payload = utf8.decode(base64Url.decode(payloadStr));
-          final payloadMap = jsonDecode(payload);
-          
-          String dbName = payloadMap['fullname'] ?? "";
-          String dbEmail = payloadMap['email'] ?? "";
-          String dbAvatar = payloadMap['avatar'] ?? "";
+    // 1. Quét Database C# lấy thông tin mới nhất (Tên, Email, Ảnh)
+    try {
+      final response = await http.get(Uri.parse('$_usersApiUrl/profile/$userId'));
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        
+        String dbName = data['fullname'] ?? "";
+        String dbEmail = data['email'] ?? "";
+        String dbAvatar = data['avatar'] ?? "";
+        String dbCover = data['cover'] ?? "";
 
-          if (dbName.isNotEmpty) {
-            fullName = dbName;
-            await prefs.setString('${userId}_name', dbName);
-          } else if (localCustomName != null && localCustomName.isNotEmpty) {
-            fullName = localCustomName;
-          } else {
-            fullName = "Người dùng";
-          }
-
-          if (dbEmail.isNotEmpty) email = dbEmail;
-          if (dbAvatar.isNotEmpty) avatarUrl = dbAvatar;
+        // Cập nhật Tên
+        if (dbName.isNotEmpty) {
+          fullName = dbName;
+          await prefs.setString('${userId}_name', dbName);
+        } else if (localCustomName != null && localCustomName.isNotEmpty) {
+          fullName = localCustomName;
+        } else {
+          fullName = "Người dùng";
         }
-      } catch (e) {
-        debugPrint("Lỗi giải mã Token: $e");
+
+        // Cập nhật Email và URL Ảnh
+        if (dbEmail.isNotEmpty) email = dbEmail;
+        if (dbAvatar.isNotEmpty) avatarUrl = dbAvatar;
+        if (dbCover.isNotEmpty) coverImageUrl = dbCover;
       }
-    } else {
+    } catch (e) {
+      debugPrint("Lỗi tải Profile từ DB: $e");
       if (localCustomName != null && localCustomName.isNotEmpty) fullName = localCustomName;
     }
 
+    // 2. Load các thông tin phụ từ Local
     headline = prefs.getString('${userId}_headline') ?? headline;
     bio = prefs.getString('${userId}_bio') ?? bio;
     location = prefs.getString('${userId}_location') ?? location;
@@ -91,7 +92,7 @@ class ProfileController extends ChangeNotifier {
   }
 
   // ==========================================
-  // HÀM CHỌN & LƯU ẢNH (ĐÃ FIX LỖI CROP WEB)
+  // HÀM CHỌN, CẮT & UPLOAD AVATAR LÊN DATABASE
   // ==========================================
   Future<void> pickAndCropAvatar(BuildContext context, String userId) async {
     final XFile? pickedFile = await _picker.pickImage(source: ImageSource.gallery);
@@ -119,23 +120,39 @@ class ProfileController extends ChangeNotifier {
               doneButtonTitle: 'Xong',
               aspectRatioLockEnabled: true,
             ),
-            // 🎯 Đã bỏ thuộc tính gây lỗi ở Web
-            WebUiSettings(
-              context: context,
-            ),
+            WebUiSettings(context: context),
           ],
         );
         if (croppedFile != null) { localAvatarBytes = await croppedFile.readAsBytes(); }
       }
 
       if (localAvatarBytes != null) {
+        String base64Image = base64Encode(localAvatarBytes!);
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('${userId}_avatarBytes', base64Encode(localAvatarBytes!));
+        await prefs.setString('${userId}_avatarBytes', base64Image);
         notifyListeners(); 
+
+        try {
+          String formattedBase64 = "data:image/jpeg;base64,$base64Image";
+          await http.post(
+            Uri.parse('$_usersApiUrl/update-avatar'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'userId': userId,
+              'imageBase64': formattedBase64
+            }),
+          );
+          debugPrint("✅ Đã lưu Avatar lên Database thành công!");
+        } catch (e) {
+          debugPrint("❌ Lỗi khi upload Avatar lên DB: $e");
+        }
       }
     }
   }
 
+  // ==========================================
+  // HÀM CHỌN, CẮT & UPLOAD ẢNH BÌA (COVER)
+  // ==========================================
   Future<void> pickAndCropCover(BuildContext context, String userId) async {
     final XFile? pickedFile = await _picker.pickImage(source: ImageSource.gallery);
     if (!context.mounted) return;
@@ -162,19 +179,34 @@ class ProfileController extends ChangeNotifier {
               doneButtonTitle: 'Xong',
               aspectRatioLockEnabled: true,
             ),
-            // 🎯 Đã bỏ thuộc tính gây lỗi ở Web
-            WebUiSettings(
-              context: context,
-            ),
+            WebUiSettings(context: context),
           ],
         );
         if (croppedFile != null) { localCoverBytes = await croppedFile.readAsBytes(); }
       }
 
+      // 🎯 NẾU CÓ ẢNH BÌA MỚI -> UPLOAD LÊN DATABASE
       if (localCoverBytes != null) {
+        String base64Image = base64Encode(localCoverBytes!);
+        
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('${userId}_coverBytes', base64Encode(localCoverBytes!));
+        await prefs.setString('${userId}_coverBytes', base64Image);
         notifyListeners();
+        
+        try {
+          String formattedBase64 = "data:image/jpeg;base64,$base64Image";
+          await http.post(
+            Uri.parse('$_usersApiUrl/update-cover'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'userId': userId,
+              'imageBase64': formattedBase64
+            }),
+          );
+          debugPrint("✅ Đã lưu Ảnh bìa (Cover) lên Database thành công!");
+        } catch (e) {
+          debugPrint("❌ Lỗi khi upload Ảnh bìa lên DB: $e");
+        }
       }
     }
   }

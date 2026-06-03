@@ -1,9 +1,9 @@
 // ignore_file: file_names
+import 'dart:convert'; // 🎯 Thêm cái này để giải mã ảnh
 import 'package:flutter/material.dart';
 
-// 🎯 Tui đã chỉnh lại đường dẫn lùi 2 cấp (../../) để ra tới mục features, sau đó chui vào profile/contact
 import '../../profile/FriendProfileScreen.dart'; 
-import '../../contacts/ContactsController.dart'; // NẾU VẪN ĐỎ DÒNG NÀY, HÃY XÓA NÓ VÀ DÙNG CTRL + . NHƯ CÁCH 1
+import '../../contacts/ContactsController.dart'; 
 
 class ChatListPanel extends StatefulWidget {
   final Function(String) onChatSelected;
@@ -17,7 +17,6 @@ class _ChatListPanelState extends State<ChatListPanel> {
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchCtrl = TextEditingController();
   
-  // Nơi khai báo Controller gọi API
   final ContactsController _contactController = ContactsController();
   
   String? _selectedChatId;
@@ -25,7 +24,6 @@ class _ChatListPanelState extends State<ChatListPanel> {
   @override
   void initState() {
     super.initState();
-    // Vừa mở App là chọc Database tải danh sách bạn bè
     _contactController.loadFriends();
     _contactController.addListener(() {
       if (mounted) setState(() {});
@@ -40,21 +38,42 @@ class _ChatListPanelState extends State<ChatListPanel> {
     super.dispose();
   }
 
-  // HÀM TÌM KIẾM NGƯỜI DÙNG KHI BẤM ENTER
+  // 🎯 HÀM LẤY AVATAR THÔNG MINH CHO DANH SÁCH CHAT
+  ImageProvider _getSmartAvatar(String? avatarUrl, String userId) {
+    if (avatarUrl != null && avatarUrl.isNotEmpty && avatarUrl.toLowerCase() != 'null') {
+      if (avatarUrl.startsWith('data:image')) {
+        final split = avatarUrl.split(',');
+        if (split.length == 2) {
+          try {
+            return MemoryImage(base64Decode(split[1]));
+          } catch (e) {
+            debugPrint("Lỗi giải mã Base64: $e");
+          }
+        }
+      } else {
+        return NetworkImage(avatarUrl);
+      }
+    }
+    return NetworkImage('https://i.pravatar.cc/150?u=$userId');
+  }
+
   void _performSearch(String query) async {
     if (query.trim().isEmpty) return;
     
     var result = await _contactController.searchUser(query.trim());
     
     if (result != null && mounted) {
-      // Tìm thấy -> Mở Profile
       Navigator.push(context, MaterialPageRoute(
         builder: (context) => FriendProfileScreen(
           userId: result['id'], 
           userName: result['fullName'] ?? 'Người dùng',
           avatarUrl: result['avatarUrl'] ?? '',
+          coverImageUrl: result['coverUrl'] ?? '', // 🎯 Móc luôn ảnh bìa sang
           bio: result['bio'] ?? 'Chưa có thông tin',
-          initialIsFriend: result['isFriend'],
+          
+          // 🎯 ĐÃ ĐỔI TÊN BIẾN THEO CHUẨN MỚI NHẤT
+          initialRelationStatus: result['relationStatus'] ?? 'none', 
+          
           contactController: _contactController, 
         ),
       ));
@@ -71,12 +90,11 @@ class _ChatListPanelState extends State<ChatListPanel> {
 
     return Column(
       children: [
-        // THANH TÌM KIẾM (REAL)
         Padding(
           padding: const EdgeInsets.all(16.0),
           child: TextField(
             controller: _searchCtrl,
-            onSubmitted: _performSearch, // 🎯 BẤM ENTER ĐỂ TÌM
+            onSubmitted: _performSearch, 
             decoration: InputDecoration(
               hintText: 'Nhập Email để tìm kiếm...',
               hintStyle: TextStyle(color: textColor.withValues(alpha: 0.5)),
@@ -89,7 +107,6 @@ class _ChatListPanelState extends State<ChatListPanel> {
           ),
         ),
         
-        // DANH SÁCH BẠN BÈ / CHAT (REAL)
         Expanded(
           child: _contactController.isLoading 
           ? const Center(child: CircularProgressIndicator())
@@ -104,13 +121,13 @@ class _ChatListPanelState extends State<ChatListPanel> {
                 itemCount: friends.length,
                 itemBuilder: (context, index) {
                   final friend = friends[index];
-                  String avatar = (friend['avatarUrl'] == null || friend['avatarUrl'] == "") 
-                                ? 'https://i.pravatar.cc/150?u=${friend['id']}' 
-                                : friend['avatarUrl'];
+
+                  // 🎯 LẤY ẢNH VÀ TRUYỀN VÀO DƯỚI DẠNG IMAGE PROVIDER
+                  ImageProvider avatarProvider = _getSmartAvatar(friend['avatarUrl'], friend['id']);
 
                   return _HoverableChatItem(
                     name: friend['name'] ?? 'Bạn bè',
-                    avatarUrl: avatar,
+                    avatarProvider: avatarProvider, // 🎯 Sửa lại tham số truyền vào
                     isSelected: _selectedChatId == friend['id'],
                     onTap: () {
                       setState(() => _selectedChatId = friend['id']);
@@ -126,14 +143,18 @@ class _ChatListPanelState extends State<ChatListPanel> {
   }
 }
 
-// Widget Item
 class _HoverableChatItem extends StatefulWidget {
   final String name;
-  final String avatarUrl;
+  final ImageProvider avatarProvider; // 🎯 CHUYỂN TỪ STRING SANG IMAGEPROVIDER
   final bool isSelected;
   final VoidCallback onTap;
 
-  const _HoverableChatItem({required this.name, required this.avatarUrl, required this.isSelected, required this.onTap});
+  const _HoverableChatItem({
+    required this.name, 
+    required this.avatarProvider, 
+    required this.isSelected, 
+    required this.onTap
+  });
 
   @override
   State<_HoverableChatItem> createState() => _HoverableChatItemState();
@@ -163,7 +184,7 @@ class _HoverableChatItemState extends State<_HoverableChatItem> {
           ),
           child: Row(
             children: [
-              CircleAvatar(radius: 24, backgroundImage: NetworkImage(widget.avatarUrl)),
+              CircleAvatar(radius: 24, backgroundImage: widget.avatarProvider), // 🎯 GẮN PROVIDER VÀO ĐÂY
               const SizedBox(width: 12),
               Expanded(
                 child: Text(widget.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor)),

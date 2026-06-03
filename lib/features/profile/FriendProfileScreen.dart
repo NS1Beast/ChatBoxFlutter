@@ -14,7 +14,10 @@ class FriendProfileScreen extends StatefulWidget {
   final String avatarUrl;
   final String coverImageUrl;
   final String bio;
-  final bool initialIsFriend;
+  
+  // 🎯 SỬA THÀNH STRING 3 TRẠNG THÁI
+  final String initialRelationStatus; 
+  
   final ContactsController contactController;
 
   const FriendProfileScreen({
@@ -24,7 +27,7 @@ class FriendProfileScreen extends StatefulWidget {
     required this.avatarUrl,
     this.coverImageUrl = '',
     required this.bio,
-    required this.initialIsFriend,
+    this.initialRelationStatus = 'none', // Mặc định là none
     required this.contactController,
   });
 
@@ -33,20 +36,19 @@ class FriendProfileScreen extends StatefulWidget {
 }
 
 class _FriendProfileScreenState extends State<FriendProfileScreen> {
-  late bool _isFriend;
+  late String _relationStatus; 
   
-  // 🎯 Thêm 2 biến để hứng ảnh từ ổ cứng (giống hệt Profile cá nhân)
   Uint8List? _friendAvatarBytes;
   Uint8List? _friendCoverBytes;
 
   @override
   void initState() {
     super.initState();
-    _isFriend = widget.initialIsFriend;
-    _loadFriendLocalData(); // Gọi hàm quét ổ cứng khi vừa mở màn hình
+    // 🎯 Hứng thẳng trạng thái từ Timeline truyền sang
+    _relationStatus = widget.initialRelationStatus;
+    _loadFriendLocalData(); 
   }
 
-  // 🎯 HÀM MÒ VÀO Ổ CỨNG LẤY ẢNH CỦA NGƯỜI NÀY (Do đang test chung 1 máy)
   Future<void> _loadFriendLocalData() async {
     final prefs = await SharedPreferences.getInstance();
     String? avatarBase64 = prefs.getString('${widget.userId}_avatarBytes');
@@ -54,45 +56,74 @@ class _FriendProfileScreenState extends State<FriendProfileScreen> {
 
     if (mounted) {
       setState(() {
-        if (avatarBase64 != null) _friendAvatarBytes = base64Decode(avatarBase64);
-        if (coverBase64 != null) _friendCoverBytes = base64Decode(coverBase64);
+        if (avatarBase64 != null && avatarBase64.isNotEmpty) {
+          _friendAvatarBytes = base64Decode(avatarBase64);
+        }
+        if (coverBase64 != null && coverBase64.isNotEmpty) {
+          _friendCoverBytes = base64Decode(coverBase64);
+        }
       });
     }
   }
 
-  bool _isValidImageUrl(String? url) {
-    if (url == null) return false;
-    final value = url.trim();
-    if (value.isEmpty) return false;
-    final lower = value.toLowerCase();
-    if (lower == 'null' || lower == 'undefined' || lower == 'none') return false;
-    return true;
-  }
-
-  // 🎯 THUẬT TOÁN ƯU TIÊN ẢNH: Ổ cứng -> Database -> Mặc định
   ImageProvider _getAvatar() {
     if (_friendAvatarBytes != null) {
       return MemoryImage(_friendAvatarBytes!);
-    } else if (_isValidImageUrl(widget.avatarUrl)) {
-      return NetworkImage(widget.avatarUrl.trim());
+    } 
+    if (widget.avatarUrl.isNotEmpty && widget.avatarUrl.toLowerCase() != 'null') {
+      if (widget.avatarUrl.startsWith('data:image')) {
+        final split = widget.avatarUrl.split(',');
+        if (split.length == 2) {
+          try {
+            return MemoryImage(base64Decode(split[1]));
+          } catch (e) {
+            debugPrint("Lỗi giải mã Base64 Avatar từ DB: $e");
+          }
+        }
+      } else {
+        return NetworkImage(widget.avatarUrl);
+      }
     }
     return NetworkImage('https://i.pravatar.cc/150?u=${widget.userId}');
   }
 
+  ImageProvider? _getCover() {
+    if (_friendCoverBytes != null) {
+      return MemoryImage(_friendCoverBytes!);
+    }
+    if (widget.coverImageUrl.isNotEmpty && widget.coverImageUrl.toLowerCase() != 'null') {
+      if (widget.coverImageUrl.startsWith('data:image')) {
+        final split = widget.coverImageUrl.split(',');
+        if (split.length == 2) {
+          try {
+            return MemoryImage(base64Decode(split[1]));
+          } catch (e) {
+            debugPrint("Lỗi giải mã Base64 Cover từ DB: $e");
+          }
+        }
+      } else {
+        return NetworkImage(widget.coverImageUrl);
+      }
+    }
+    return null;
+  }
+
   void _toggleFriendStatus() async {
-    bool newStatus = await widget.contactController.toggleFriendStatus(widget.userId);
+    String newStatus = await widget.contactController.toggleFriendStatus(widget.userId);
 
     if (mounted) {
-      setState(() => _isFriend = newStatus);
+      setState(() => _relationStatus = newStatus);
+
+      String message = "";
+      if (newStatus == 'pending') message = 'Đã gửi yêu cầu kết bạn đến ${widget.userName}!';
+      else if (newStatus == 'friend') message = 'Bạn và ${widget.userName} đã trở thành bạn bè!';
+      else message = 'Đã hủy kết bạn / yêu cầu với ${widget.userName}.';
+
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            _isFriend
-                ? 'Đã thêm ${widget.userName} vào danh bạ!'
-                : 'Đã hủy kết bạn với ${widget.userName}.',
-          ),
-          backgroundColor: _isFriend ? Colors.green : Colors.orange,
+          content: Text(message),
+          backgroundColor: newStatus == 'pending' ? Colors.orange : (newStatus == 'friend' ? Colors.green : Colors.redAccent),
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 2),
         ),
@@ -113,10 +144,7 @@ class _FriendProfileScreenState extends State<FriendProfileScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Thêm vào nhóm',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-              ),
+              Text('Thêm vào nhóm', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
               const SizedBox(height: 16),
               ListTile(
                 leading: const CircleAvatar(child: Icon(Icons.group)),
@@ -145,39 +173,6 @@ class _FriendProfileScreenState extends State<FriendProfileScreen> {
     );
   }
 
-  // 🎯 THUẬT TOÁN XÂY DỰNG BACKGROUND ƯU TIÊN Ổ CỨNG
-  Widget _buildCoverBackground(Color primaryColor) {
-    ImageProvider? coverProvider;
-
-    if (_friendCoverBytes != null) {
-      coverProvider = MemoryImage(_friendCoverBytes!);
-    } else if (_isValidImageUrl(widget.coverImageUrl)) {
-      coverProvider = NetworkImage(widget.coverImageUrl.trim());
-    }
-
-    return Container(
-      height: 160,
-      width: double.infinity,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: LinearGradient(
-          colors: [primaryColor, primaryColor.withValues(alpha: 0.6)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, 4)),
-        ],
-        image: coverProvider != null 
-            ? DecorationImage(image: coverProvider, fit: BoxFit.cover) 
-            : null,
-      ),
-      child: coverProvider == null 
-          ? const Center(child: Icon(Icons.auto_awesome, color: Colors.white24, size: 80)) 
-          : null,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final surfaceColor = Theme.of(context).colorScheme.surface;
@@ -185,19 +180,15 @@ class _FriendProfileScreenState extends State<FriendProfileScreen> {
     final subtitleColor = Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6);
     final primaryColor = Theme.of(context).colorScheme.primary;
 
+    ImageProvider? finalCover = _getCover();
+    bool isFriend = (_relationStatus == 'friend');
+
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: textColor),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          'Hồ sơ liên hệ',
-          style: TextStyle(color: textColor, fontWeight: FontWeight.bold),
-        ),
+        backgroundColor: Colors.transparent, elevation: 0,
+        leading: IconButton(icon: Icon(Icons.arrow_back, color: textColor), onPressed: () => Navigator.pop(context)),
+        title: Text('Hồ sơ liên hệ', style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
         centerTitle: true,
       ),
       body: Center(
@@ -209,6 +200,7 @@ class _FriendProfileScreenState extends State<FriendProfileScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
+                  // --- ẢNH BÌA & AVATAR ---
                   SizedBox(
                     height: 220,
                     child: Stack(
@@ -216,151 +208,136 @@ class _FriendProfileScreenState extends State<FriendProfileScreen> {
                       children: [
                         Align(
                           alignment: Alignment.topCenter,
-                          child: _buildCoverBackground(primaryColor),
+                          child: Container(
+                            height: 160, width: double.infinity,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(24),
+                              gradient: LinearGradient(colors: [primaryColor, primaryColor.withValues(alpha: 0.6)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, 4))],
+                              image: finalCover != null ? DecorationImage(image: finalCover, fit: BoxFit.cover) : null,
+                            ),
+                            child: finalCover == null ? const Center(child: Icon(Icons.auto_awesome, color: Colors.white24, size: 80)) : null,
+                          ),
                         ),
                         Container(
                           padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                            shape: BoxShape.circle,
-                          ),
-                          child: CircleAvatar(
-                            radius: 56,
-                            backgroundColor: Colors.grey[300],
-                            backgroundImage: _getAvatar(),
-                          ),
+                          decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, shape: BoxShape.circle),
+                          child: CircleAvatar(radius: 56, backgroundColor: Colors.grey[300], backgroundImage: _getAvatar()),
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 16),
 
-                  Text(
-                    widget.userName,
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: textColor,
-                        ),
-                  ),
+                  Text(widget.userName, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold, color: textColor)),
                   const SizedBox(height: 8),
-                  Text(
-                    widget.bio,
-                    style: TextStyle(color: subtitleColor, fontSize: 16),
-                    textAlign: TextAlign.center,
-                  ),
+                  Text(widget.bio, style: TextStyle(color: subtitleColor, fontSize: 16), textAlign: TextAlign.center),
                   const SizedBox(height: 24),
 
+                  // --- NÚT TƯƠNG TÁC NHANH ---
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      _HoverableActionCard(
-                        icon: Icons.chat_bubble_rounded,
-                        label: 'Nhắn tin',
-                        primaryColor: primaryColor,
-                        surfaceColor: surfaceColor,
-                        textColor: textColor,
-                        onTap: () {
-                          Navigator.pop(context);
-                        },
-                      ),
-                      const SizedBox(width: 16),
-                      _HoverableActionCard(
-                        icon: Icons.call_rounded,
-                        label: 'Gọi thoại',
-                        primaryColor: primaryColor,
-                        surfaceColor: surfaceColor,
-                        textColor: textColor,
-                        onTap: () => Navigator.push(
-                          context,
-                          PageRouteBuilder(
-                            opaque: false,
-                            pageBuilder: (context, animation, _) => CallScreen(
-                              isVideoCall: false,
-                              userName: widget.userName,
-                              avatarUrl: widget.avatarUrl.isEmpty ? 'https://i.pravatar.cc/150?u=${widget.userId}' : widget.avatarUrl,
-                            ),
-                          ),
+                      if (isFriend) ...[
+                        _HoverableActionCard(
+                          icon: Icons.chat_bubble_rounded, label: 'Nhắn tin',
+                          primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor,
+                          onTap: () => Navigator.pop(context),
                         ),
-                      ),
-                      const SizedBox(width: 16),
-                      _HoverableActionCard(
-                        icon: Icons.videocam_rounded,
-                        label: 'Gọi video',
-                        primaryColor: primaryColor,
-                        surfaceColor: surfaceColor,
-                        textColor: textColor,
-                        onTap: () => Navigator.push(
-                          context,
-                          PageRouteBuilder(
-                            opaque: false,
-                            pageBuilder: (context, animation, _) => CallScreen(
-                              isVideoCall: true,
-                              userName: widget.userName,
-                              avatarUrl: widget.avatarUrl.isEmpty ? 'https://i.pravatar.cc/150?u=${widget.userId}' : widget.avatarUrl,
-                            ),
-                          ),
+                        const SizedBox(width: 16),
+                        _HoverableActionCard(
+                          icon: Icons.call_rounded, label: 'Gọi thoại',
+                          primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor,
+                          onTap: () => Navigator.push(context, PageRouteBuilder(opaque: false, pageBuilder: (context, animation, _) => CallScreen(isVideoCall: false, userName: widget.userName, avatarUrl: widget.avatarUrl.isEmpty ? 'https://i.pravatar.cc/150?u=${widget.userId}' : widget.avatarUrl))),
                         ),
-                      ),
+                        const SizedBox(width: 16),
+                        _HoverableActionCard(
+                          icon: Icons.videocam_rounded, label: 'Gọi video',
+                          primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor,
+                          onTap: () => Navigator.push(context, PageRouteBuilder(opaque: false, pageBuilder: (context, animation, _) => CallScreen(isVideoCall: true, userName: widget.userName, avatarUrl: widget.avatarUrl.isEmpty ? 'https://i.pravatar.cc/150?u=${widget.userId}' : widget.avatarUrl))),
+                        ),
+                      ]
                     ],
                   ),
-                  const SizedBox(height: 24),
+                  if (isFriend) const SizedBox(height: 24),
 
+                  // ==========================================
+                  // NÚT KẾT BẠN / HỦY BẠN LỚN NHẤT
+                  // ==========================================
                   SizedBox(
                     width: double.infinity,
+                    height: 56, 
                     child: AnimatedSwitcher(
                       duration: const Duration(milliseconds: 300),
-                      child: _isFriend
+                      child: _relationStatus == 'friend'
                           ? OutlinedButton.icon(
                               key: const ValueKey('unfriend'),
                               onPressed: _toggleFriendStatus,
-                              icon: const Icon(Icons.person_remove_rounded, size: 18),
-                              label: const Text('Hủy kết bạn', style: TextStyle(fontWeight: FontWeight.bold)),
+                              icon: const Icon(Icons.person_remove_rounded, size: 22),
+                              label: const FittedBox(child: Text('Hủy kết bạn', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
                               style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.redAccent,
-                                side: const BorderSide(color: Colors.redAccent),
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                foregroundColor: Colors.redAccent, side: const BorderSide(color: Colors.redAccent),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), 
+                                minimumSize: const Size.fromHeight(56),
                               ),
                             )
-                          : FilledButton.icon(
-                              key: const ValueKey('add_friend'),
-                              onPressed: _toggleFriendStatus,
-                              icon: const Icon(Icons.person_add_rounded, size: 18),
-                              label: const Text('Thêm bạn bè', style: TextStyle(fontWeight: FontWeight.bold)),
-                              style: FilledButton.styleFrom(
-                                backgroundColor: primaryColor,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              ),
-                            ),
+                          : _relationStatus == 'pending'
+                            ? FilledButton.icon(
+                                key: const ValueKey('pending'),
+                                onPressed: _toggleFriendStatus,
+                                icon: const Icon(Icons.access_time_rounded, size: 22),
+                                label: const FittedBox(child: Text('Đã gửi yêu cầu', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: Colors.orange,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                  minimumSize: const Size.fromHeight(56),
+                                ),
+                              )
+                            : _relationStatus == 'awaiting'
+                              ? FilledButton.icon(
+                                  key: const ValueKey('awaiting'),
+                                  onPressed: _toggleFriendStatus,
+                                  icon: const Icon(Icons.check_circle_outline_rounded, size: 22),
+                                  label: const FittedBox(child: Text('Chấp nhận kết bạn', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: Colors.green,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                    minimumSize: const Size.fromHeight(56),
+                                  ),
+                                )
+                              : FilledButton.icon(
+                                  key: const ValueKey('add_friend'),
+                                  onPressed: _toggleFriendStatus,
+                                  icon: const Icon(Icons.person_add_rounded, size: 22),
+                                  label: const FittedBox(child: Text('Thêm bạn bè', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: primaryColor,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                    minimumSize: const Size.fromHeight(56),
+                                  ),
+                                ),
                     ),
                   ),
                   const SizedBox(height: 32),
 
+                  // --- THÔNG TIN CHI TIẾT ---
                   _buildSectionHeader('Thông tin', textColor),
                   Container(
-                    decoration: BoxDecoration(
-                      color: surfaceColor,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))],
-                    ),
+                    decoration: BoxDecoration(color: surfaceColor, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))]),
                     child: Column(
                       children: [
                         _buildInfoTile(context, Icons.info_outline, 'Giới thiệu', widget.bio, subtitleColor, textColor),
                         const Divider(height: 1, indent: 56, endIndent: 24),
-                        _buildInfoTile(context, Icons.email_outlined, 'Email', _isFriend ? 'Đã liên kết' : 'Chỉ bạn bè mới có thể xem', subtitleColor, textColor),
+                        _buildInfoTile(context, Icons.email_outlined, 'Email', isFriend ? 'Đã liên kết' : 'Chỉ bạn bè mới có thể xem', subtitleColor, textColor),
                       ],
                     ),
                   ),
                   const SizedBox(height: 32),
 
+                  // --- CÁC TÙY CHỌN KHÁC ---
                   _buildSectionHeader('Tùy chọn', textColor),
                   Container(
-                    decoration: BoxDecoration(
-                      color: surfaceColor,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))],
-                    ),
+                    decoration: BoxDecoration(color: surfaceColor, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))]),
                     child: Column(
                       children: [
                         _buildActionTile(context, Icons.group_add_rounded, 'Thêm vào nhóm', primaryColor, onTap: _showAddToGroupModal),
@@ -386,10 +363,7 @@ class _FriendProfileScreenState extends State<FriendProfileScreen> {
       padding: const EdgeInsets.only(bottom: 12, left: 8),
       child: Align(
         alignment: Alignment.centerLeft,
-        child: Text(
-          title.toUpperCase(),
-          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: textColor.withValues(alpha: 0.5), letterSpacing: 1.2),
-        ),
+        child: Text(title.toUpperCase(), style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: textColor.withValues(alpha: 0.5), letterSpacing: 1.2)),
       ),
     );
   }
@@ -430,12 +404,7 @@ class _HoverableActionCard extends StatefulWidget {
   final VoidCallback onTap;
 
   const _HoverableActionCard({
-    required this.icon,
-    required this.label,
-    required this.primaryColor,
-    required this.surfaceColor,
-    required this.textColor,
-    required this.onTap,
+    required this.icon, required this.label, required this.primaryColor, required this.surfaceColor, required this.textColor, required this.onTap,
   });
 
   @override
@@ -460,9 +429,7 @@ class _HoverableActionCardState extends State<_HoverableActionCard> {
             decoration: BoxDecoration(
               color: _isHovered ? widget.primaryColor.withValues(alpha: 0.1) : widget.surfaceColor,
               borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(color: Colors.black.withValues(alpha: _isHovered ? 0.08 : 0.03), blurRadius: _isHovered ? 15 : 10, offset: const Offset(0, 4)),
-              ],
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: _isHovered ? 0.08 : 0.03), blurRadius: _isHovered ? 15 : 10, offset: const Offset(0, 4))],
             ),
             child: Column(
               children: [

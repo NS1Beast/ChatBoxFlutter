@@ -39,8 +39,11 @@ class _MainChatAreaState extends State<MainChatArea> {
       userName: 'Trần Thị B', 
       avatarUrl: 'https://i.pravatar.cc/150?img=20', 
       bio: 'Yêu màu hồng, ghét sự giả dối 🌸', 
-      initialIsFriend: true,
-      contactController: _contactController, // Truyền Controller vào đây
+      
+      // 🎯 ĐÃ ĐỔI TÊN BIẾN THEO CHUẨN 3 TRẠNG THÁI MỚI
+      initialRelationStatus: 'friend', 
+      
+      contactController: _contactController, 
     )));
   }
 

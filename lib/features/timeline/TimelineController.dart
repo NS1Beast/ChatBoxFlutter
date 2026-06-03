@@ -1,9 +1,13 @@
 // ignore_file: file_names
 import 'package:flutter/material.dart';
 
-// Mô hình dữ liệu Bài viết
+// Mô hình dữ liệu Bài viết (Đã thiết kế lại để sẵn sàng đón dữ liệu từ C# Database)
 class Post {
   final String id;
+  
+  // 🎯 QUAN TRỌNG: Phải mang theo ID của người đăng để khi nhấn vào Avatar còn biết là mở Profile của ai!
+  final String userId; 
+  
   final String userName;
   final String userAvatar;
   final String timeAgo;
@@ -15,36 +19,52 @@ class Post {
   bool isLiked;
 
   Post({
-    required this.id, required this.userName, required this.userAvatar, 
-    required this.timeAgo, this.content, required this.mediaType, 
-    this.mediaUrl, this.likes = 0, this.comments = 0, this.isLiked = false
+    required this.id, 
+    required this.userId, // 🎯
+    required this.userName, 
+    required this.userAvatar, 
+    required this.timeAgo, 
+    this.content, 
+    required this.mediaType, 
+    this.mediaUrl, 
+    this.likes = 0, 
+    this.comments = 0, 
+    this.isLiked = false
   });
 }
 
 class TimelineController extends ChangeNotifier {
-  // Dữ liệu giả lập (Sau này sẽ fetch từ Database Supabase/PostgreSQL)
+  // Dữ liệu giả lập (Sau này sẽ fetch từ Database C# PostgreSQL)
+  // Tui đã nhét thử ID người đăng vào để ông test Click mở Profile
   final List<Post> posts = [
     Post(
-      id: 'p1', userName: 'Trần Thị B', userAvatar: 'https://i.pravatar.cc/150?img=5', 
-      timeAgo: '15 phút trước', content: 'Hôm nay trời đẹp quá! Đi cafe thôi ☕️', 
-      mediaType: 'image', mediaUrl: 'https://picsum.photos/seed/cafe/600/400', 
+      id: 'p1', 
+      userId: 'user-001', // 🎯 Giả lập ID thật
+      userName: 'Trần Thị B', 
+      userAvatar: 'https://i.pravatar.cc/150?img=5', 
+      timeAgo: '15 phút trước', 
+      content: 'Hôm nay trời đẹp quá! Đi cafe thôi ☕️', 
+      mediaType: 'image', 
+      mediaUrl: 'https://picsum.photos/seed/cafe/600/400', 
       likes: 12, comments: 3
     ),
     Post(
-      id: 'p2', userName: 'Lê Hoàng C', userAvatar: 'https://i.pravatar.cc/150?img=8', 
-      timeAgo: '2 giờ trước', content: 'Vừa hoàn thành xong module UI bằng Flutter. Cảm giác thật tuyệt vời! Mượt mà và xịn xò 🚀', 
+      id: 'p2', 
+      userId: 'user-002', // 🎯 Giả lập ID thật
+      userName: 'Lê Hoàng C', 
+      userAvatar: 'https://i.pravatar.cc/150?img=8', 
+      timeAgo: '2 giờ trước', 
+      content: 'Vừa hoàn thành xong module UI bằng Flutter. Cảm giác thật tuyệt vời! Mượt mà và xịn xò 🚀', 
       mediaType: 'none', likes: 45, comments: 10
     ),
     Post(
-      id: 'p3', userName: 'Nguyễn Văn A', userAvatar: 'https://i.pravatar.cc/150?img=12', 
-      timeAgo: 'Hôm qua', content: 'Chill cùng bản nhạc này nhé mọi người 🎵', 
+      id: 'p3', 
+      userId: 'user-003', // 🎯 Giả lập ID thật
+      userName: 'Nguyễn Văn A', 
+      userAvatar: 'https://i.pravatar.cc/150?img=12', 
+      timeAgo: 'Hôm qua', 
+      content: 'Chill cùng bản nhạc này nhé mọi người 🎵', 
       mediaType: 'music', likes: 8, comments: 1
-    ),
-    Post(
-      id: 'p4', userName: 'Hội Coder Cú Đêm', userAvatar: 'https://i.pravatar.cc/150?img=24', 
-      timeAgo: '2 ngày trước', content: 'Thử test xem ảnh GIF có chạy mượt không nào!', 
-      mediaType: 'gif', mediaUrl: 'https://i.giphy.com/media/xT9IgzoKnwFNmISR8I/giphy.webp', 
-      likes: 102, comments: 15
     ),
   ];
 

@@ -1,11 +1,13 @@
 // ignore_file: file_names
 import 'package:flutter/material.dart';
+import 'dart:convert';
+
 import 'TimelineController.dart';
-// Import các widget đã làm để tái sử dụng
 import '../chat/widgets/FullScreenImageViewer.dart';
 import '../profile/FriendProfileScreen.dart';
-// 🎯 IMPORT THÊM CONTACTS CONTROLLER
 import '../contacts/ContactsController.dart'; 
+// 🎯 IMPORT THÊM PROFILE CONTROLLER ĐỂ LẤY AVATAR CHÍNH CHỦ
+import '../profile/ProfileController.dart';
 
 class TimelineScreen extends StatefulWidget {
   const TimelineScreen({super.key});
@@ -18,28 +20,84 @@ class _TimelineScreenState extends State<TimelineScreen> {
   final TimelineController _controller = TimelineController();
   final ScrollController _scrollController = ScrollController();
   
-  // 🎯 KHAI BÁO CONTROLLER TẠI ĐÂY
   final ContactsController _contactController = ContactsController();
+  
+  // 🎯 GỌI CONTROLLER CHỨA THÔNG TIN CÁ NHÂN
+  final ProfileController _profileController = ProfileController();
+
+  @override
+  void initState() {
+    super.initState();
+    // 🎯 Lắng nghe sự thay đổi của Profile (đổi avatar phát cập nhật luôn)
+    _profileController.addListener(_updateUI);
+  }
+
+  void _updateUI() {
+    if (mounted) setState(() {});
+  }
 
   @override
   void dispose() {
+    _profileController.removeListener(_updateUI);
     _scrollController.dispose();
-    _contactController.dispose(); // Nhớ giải phóng bộ nhớ
+    _contactController.dispose(); 
     super.dispose();
   }
 
-  // --- HÀM MỞ MÀN HÌNH HỒ SƠ (ĐÃ SỬA THÊM THAM SỐ) ---
-  void _openUserProfile(String userName, String avatarUrl) {
+  // 🎯 HÀM LẤY AVATAR CỦA CHÍNH MÌNH Ở KHUNG ĐĂNG BÀI
+  ImageProvider _getMyAvatar() {
+    if (_profileController.localAvatarBytes != null) {
+      return MemoryImage(_profileController.localAvatarBytes!); 
+    } else if (_profileController.avatarUrl.isNotEmpty && _profileController.avatarUrl != 'null') {
+      if (_profileController.avatarUrl.startsWith('data:image')) {
+        final split = _profileController.avatarUrl.split(',');
+        if (split.length == 2) {
+          try {
+            return MemoryImage(base64Decode(split[1]));
+          } catch (e) {
+            debugPrint("Lỗi giải mã Base64 Avatar cá nhân: $e");
+          }
+        }
+      } else {
+        return NetworkImage(_profileController.avatarUrl); 
+      }
+    }
+    return const NetworkImage('https://i.pravatar.cc/150'); // Nếu chưa có ảnh thì lấy tạm cái này
+  }
+
+  // 🎯 HÀM LẤY AVATAR THÔNG MINH CHO CÁC BÀI VIẾT (CỦA NGƯỜI KHÁC)
+  ImageProvider _getSmartAvatar(String avatarUrl, String userId) {
+    if (avatarUrl.isNotEmpty && avatarUrl.toLowerCase() != 'null') {
+      if (avatarUrl.startsWith('data:image')) {
+        final split = avatarUrl.split(',');
+        if (split.length == 2) {
+          try {
+            return MemoryImage(base64Decode(split[1]));
+          } catch (e) {
+            debugPrint("Lỗi giải mã Base64 Avatar trên Timeline: $e");
+          }
+        }
+      } else {
+        return NetworkImage(avatarUrl);
+      }
+    }
+    return NetworkImage('https://i.pravatar.cc/150?u=$userId');
+  }
+
+  void _openUserProfile(String userId, String userName, String avatarUrl) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => FriendProfileScreen(
-          userId: 'mock_timeline_id', // ID tạm thời cho Timeline giả lập
+          userId: userId, 
           userName: userName,
           avatarUrl: avatarUrl,
           bio: 'Hoạt động năng nổ trên Timeline 🌟',
-          initialIsFriend: true, 
-          contactController: _contactController, // Truyền Controller vào
+          
+          // 🎯 ĐÃ ĐỔI TÊN BIẾN (Vì dữ liệu giả nên tạm để 'none' là chưa kết bạn)
+          initialRelationStatus: 'none', 
+          
+          contactController: _contactController, 
         ),
       ),
     );
@@ -78,7 +136,6 @@ class _TimelineScreenState extends State<TimelineScreen> {
                     ),
                     const Spacer(),
                     
-                    // Ô Tìm Kiếm bài viết
                     Container(
                       width: 280,
                       height: 40,
@@ -98,14 +155,11 @@ class _TimelineScreenState extends State<TimelineScreen> {
                     ),
                     const SizedBox(width: 16),
                     
-                    // Nút Lọc (Filter)
                     IconButton(
                       icon: const Icon(Icons.tune_rounded),
                       color: textColor.withValues(alpha: 0.7),
                       tooltip: 'Bộ lọc bảng tin',
-                      onPressed: () {
-                        // TODO: Hiện menu chọn Mới nhất / Phổ biến
-                      },
+                      onPressed: () {},
                     ),
                   ],
                 ),
@@ -126,14 +180,11 @@ class _TimelineScreenState extends State<TimelineScreen> {
                     children: [
                       Center(
                         child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 680), // Giới hạn độ rộng chuẩn cho bài viết
+                          constraints: const BoxConstraints(maxWidth: 680), 
                           child: Column(
                             children: [
-                              // KHUNG ĐĂNG BÀI
                               _buildCreatePostCard(surfaceColor, textColor, primaryColor),
                               const SizedBox(height: 24),
-                              
-                              // DANH SÁCH BÀI VIẾT
                               ..._controller.posts.map((post) => _buildPostCard(post, surfaceColor, textColor, primaryColor)),
                             ],
                           ),
@@ -150,7 +201,6 @@ class _TimelineScreenState extends State<TimelineScreen> {
     );
   }
 
-  // --- COMPONENT: Khung tạo bài viết mới ---
   Widget _buildCreatePostCard(Color surfaceColor, Color textColor, Color primaryColor) {
     return Container(
       padding: const EdgeInsets.all(20),
@@ -163,7 +213,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
         children: [
           Row(
             children: [
-              const CircleAvatar(radius: 24, backgroundImage: NetworkImage('https://i.pravatar.cc/150?img=11')), 
+              CircleAvatar(radius: 24, backgroundImage: _getMyAvatar()), 
               const SizedBox(width: 16),
               Expanded(
                 child: Container(
@@ -192,7 +242,6 @@ class _TimelineScreenState extends State<TimelineScreen> {
               _buildPostActionButton(Icons.photo_library_rounded, 'Hình ảnh', Colors.green),
               _buildPostActionButton(Icons.videocam_rounded, 'Video', Colors.redAccent),
               _buildPostActionButton(Icons.music_note_rounded, 'Âm nhạc', Colors.orange),
-              // Nút Đăng bài nổi bật
               FilledButton.icon(
                 onPressed: () {}, 
                 icon: const Icon(Icons.send_rounded, size: 16),
@@ -218,7 +267,6 @@ class _TimelineScreenState extends State<TimelineScreen> {
     );
   }
 
-  // --- COMPONENT: Thẻ bài viết (Post) ---
   Widget _buildPostCard(dynamic post, Color surfaceColor, Color textColor, Color primaryColor) {
     return Container(
       margin: const EdgeInsets.only(bottom: 24),
@@ -231,14 +279,16 @@ class _TimelineScreenState extends State<TimelineScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header của bài viết (Avatar + Tên + Giờ)
           Row(
             children: [
               MouseRegion(
                 cursor: SystemMouseCursors.click,
                 child: GestureDetector(
-                  onTap: () => _openUserProfile(post.userName, post.userAvatar),
-                  child: CircleAvatar(radius: 22, backgroundImage: NetworkImage(post.userAvatar)),
+                  onTap: () => _openUserProfile(post.userId, post.userName, post.userAvatar),
+                  child: CircleAvatar(
+                    radius: 22, 
+                    backgroundImage: _getSmartAvatar(post.userAvatar, post.userId),
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -249,7 +299,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
                     MouseRegion(
                       cursor: SystemMouseCursors.click,
                       child: GestureDetector(
-                        onTap: () => _openUserProfile(post.userName, post.userAvatar),
+                        onTap: () => _openUserProfile(post.userId, post.userName, post.userAvatar),
                         child: Text(post.userName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor)),
                       ),
                     ),
@@ -268,16 +318,13 @@ class _TimelineScreenState extends State<TimelineScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Nội dung Text
           if (post.content != null && post.content!.isNotEmpty) ...[
             Text(post.content!, style: TextStyle(fontSize: 15, color: textColor, height: 1.4)),
             const SizedBox(height: 16),
           ],
 
-          // Media (Hình ảnh / Video / Nhạc)
           if (post.mediaType != 'none') _buildMediaContent(post, primaryColor),
 
-          // Dải đếm Like & Comment nhỏ
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
             child: Row(
@@ -294,7 +341,6 @@ class _TimelineScreenState extends State<TimelineScreen> {
           const Divider(height: 1),
           const SizedBox(height: 8),
 
-          // Nút tương tác
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
@@ -319,11 +365,10 @@ class _TimelineScreenState extends State<TimelineScreen> {
             ],
           ),
 
-          // Ô nhập Bình luận nhanh
           const SizedBox(height: 16),
           Row(
             children: [
-              const CircleAvatar(radius: 16, backgroundImage: NetworkImage('https://i.pravatar.cc/150?img=11')), 
+              CircleAvatar(radius: 16, backgroundImage: _getMyAvatar()), 
               const SizedBox(width: 12),
               Expanded(
                 child: Container(

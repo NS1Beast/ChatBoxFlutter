@@ -47,6 +47,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     await ProfileController().loadUserProfile(userId);
   }
 
+  // 🎯 HÀM LẮNG NGHE YÊU CẦU "CHUYỂN SANG TAB CHAT" TỪ DANH BẠ
+  void _handleStartChat(String friendId) {
+    setState(() {
+      _selectedIndex = 0; // Kích hoạt tab số 0 (Icon Tin nhắn)
+      _activeChatId = friendId; // Đặt ID người chat để mở đúng màn hình
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -104,12 +112,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           Expanded(
                             child: _activeChatId != null 
                                 ? const MainChatArea() 
+                                // (Tương lai khi DB thật: Bơm ID xuống MainChatArea như vầy nè)
+                                // ? MainChatArea(chatId: _activeChatId!) 
                                 : const WelcomeScreen(), 
                           ), 
                         ],
                       );
 
-                    case 1: return const ContactsScreen();
+                    case 1: 
+                      // 🎯 GẮN CÁP KÍCH HOẠT HÀM ĐIỀU HƯỚNG VÀO ContactsScreen
+                      return ContactsScreen(
+                        onStartChat: _handleStartChat,
+                      );
+                      
                     case 2: return const TimelineScreen();
                     case 3: return const NotificationsScreen();
                     case 4: return const SettingsScreen();

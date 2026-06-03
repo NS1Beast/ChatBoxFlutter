@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // 🎯 THÊM CÁI NÀY
 import 'OpenID.dart'; 
 
 enum AuthFormType { login, register, forgotPassword }
@@ -101,6 +102,41 @@ class AuthController extends ChangeNotifier {
   }
 
   // ==========================================
+  // 🎯 HÀM LƯU TÊN VÀO Ổ CỨNG TRÁNH LỖI "NGƯỜI DÙNG MỚI"
+  // ==========================================
+  Future<void> _extractAndSaveUserInfoFromToken(String token) async {
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) return;
+
+      String payloadStr = parts[1];
+      while (payloadStr.length % 4 != 0) {
+        payloadStr += '=';
+      }
+
+      final payload = utf8.decode(base64Url.decode(payloadStr));
+      final payloadMap = jsonDecode(payload);
+
+      final String userId = payloadMap['nameid'] ??
+          payloadMap['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'] ??
+          "guest";
+
+      final String fullName = payloadMap['fullname'] ??
+          payloadMap['name'] ??
+          payloadMap['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name'] ??
+          "Người dùng";
+
+      final prefs = await SharedPreferences.getInstance();
+
+      if (fullName.isNotEmpty && fullName != "Người dùng") {
+        await prefs.setString('${userId}_name', fullName);
+      }
+    } catch (e) {
+      debugPrint("Lỗi khi giải mã JWT Token: $e");
+    }
+  }
+
+  // ==========================================
   // LUỒNG ĐĂNG KÝ 3 BƯỚC
   // ==========================================
   Future<String?> checkEmailAndSendOTP(String email) async {
@@ -190,9 +226,8 @@ class AuthController extends ChangeNotifier {
   Future<bool> login(String email, String password) async {
     _setLoading(true);
     
-    // 🎯 PHỤC HỒI CHỨC NĂNG ĐĂNG NHẬP NHANH BẰNG "1" - "1"
     if (email == '1' && password == '1') { 
-      await Future.delayed(const Duration(seconds: 1)); // Giả lập loading xíu cho mượt
+      await Future.delayed(const Duration(seconds: 1));
       await _storage.write(key: 'jwt_token', value: 'dev_test_token_12345'); 
       _setLoading(false);
       return true; 
@@ -204,6 +239,10 @@ class AuthController extends ChangeNotifier {
       if (response.statusCode == 200) {
         String token = jsonDecode(response.body)['token'];
         await _storage.write(key: 'jwt_token', value: token);
+        
+        // 🎯 LƯU THÔNG TIN LÚC LOGIN VÀO
+        await _extractAndSaveUserInfoFromToken(token);
+        
         return true;
       } else { 
         debugPrint(jsonDecode(response.body)['message']);
@@ -219,6 +258,10 @@ class AuthController extends ChangeNotifier {
       _setLoading(false);
       if (jwtToken == null || jwtToken.isEmpty) return false;
       await _storage.write(key: 'jwt_token', value: jwtToken);
+      
+      // 🎯 LƯU THÔNG TIN LÚC LOGIN GOOGLE VÀO
+      await _extractAndSaveUserInfoFromToken(jwtToken);
+      
       return true;
     } catch (e) { _setLoading(false); return false; }
   }

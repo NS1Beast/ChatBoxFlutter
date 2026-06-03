@@ -2,7 +2,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-// 🎯 Sửa lại đường dẫn tới AuthController cho đúng với cấu trúc của ông
 import '../auth/AuthController.dart'; 
 
 class ContactsController extends ChangeNotifier {
@@ -103,8 +102,11 @@ class ContactsController extends ChangeNotifier {
         'id': result['id'],
         'name': result['fullName'] ?? 'Người dùng',
         'avatarUrl': result['avatarUrl'] ?? '',
+        'coverUrl': result['coverUrl'] ?? '', 
         'bio': result['bio'] ?? 'Chưa có thông tin',
-        'isFriend': result['isFriend']
+        // 🎯 Hứng thêm 2 trạng thái này để Giao diện biết đường xử lý
+        'relationStatus': result['relationStatus'] ?? 'none',
+        'isFriend': result['isFriend'] ?? false
       };
       notifyListeners();
     } else {
@@ -115,7 +117,7 @@ class ContactsController extends ChangeNotifier {
   }
 
   // 4. Thêm / Hủy kết bạn
-  Future<bool> toggleFriendStatus(String friendId) async {
+  Future<String> toggleFriendStatus(String friendId) async {
     String currentUserId = await AuthController().getCurrentUserId();
     try {
       final response = await http.post(
@@ -126,20 +128,25 @@ class ContactsController extends ChangeNotifier {
       
       if (response.statusCode == 200) {
         await loadFriends(); 
-        return jsonDecode(response.body)['isFriend'];
+        return jsonDecode(response.body)['status']; 
       }
     } catch (e) {
       debugPrint("Lỗi kết bạn: $e");
     }
-    return false;
+    return "none"; 
   }
 
   // Nút Kết bạn / Hủy bạn ở cột Phải màn hình
   Future<void> toggleFriendStatusFromPanel() async {
     if (selectedFriend == null) return;
     
-    bool newStatus = await toggleFriendStatus(selectedFriend!['id']);
-    selectedFriend!['isFriend'] = newStatus;
+    // 🎯 Đã sửa kiểu `bool` thành `String` để khớp với API mới
+    String newStatus = await toggleFriendStatus(selectedFriend!['id']);
+    
+    // Cập nhật lại dữ liệu để UI thay đổi theo
+    selectedFriend!['relationStatus'] = newStatus;
+    selectedFriend!['isFriend'] = (newStatus == 'friend');
+    
     notifyListeners();
   }
 }

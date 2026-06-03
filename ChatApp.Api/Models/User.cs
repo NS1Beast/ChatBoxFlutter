@@ -14,6 +14,7 @@ public partial class User
     public string Fullname { get; set; } = null!;
 
     public string? Avatarurl { get; set; }
+    public string? Coverurl { get; set; }
 
     public string? Bio { get; set; }
 

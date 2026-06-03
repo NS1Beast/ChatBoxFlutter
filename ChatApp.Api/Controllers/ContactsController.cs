@@ -16,8 +16,7 @@ namespace ChatApp.Api.Controllers
         }
 
         // ==========================================
-        // 1. TÌM KIẾM NGƯỜI DÙNG THEO EMAIL
-        // GET: api/contacts/search?email=abc@gmail.com
+        // 1. TÌM KIẾM NGƯỜI DÙNG (CÓ TRẠNG THÁI QUAN HỆ)
         // ==========================================
         [HttpGet("search")]
         public async Task<IActionResult> SearchUser([FromQuery] string email, [FromQuery] Guid currentUserId)
@@ -25,8 +24,14 @@ namespace ChatApp.Api.Controllers
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
             if (user == null) return NotFound(new { message = "Không tìm thấy người dùng nào với Email này!" });
 
-            // Kiểm tra xem 2 người đã là bạn bè chưa (Chỉ cần check 1 chiều là đủ biết)
-            bool isFriend = await _context.Contacts.AnyAsync(c => c.Userid == currentUserId && c.Friendid == user.Id);
+            // 🎯 Lấy thông tin 2 chiều để xét trạng thái
+            var contactAtoB = await _context.Contacts.FirstOrDefaultAsync(c => c.Userid == currentUserId && c.Friendid == user.Id);
+            var contactBtoA = await _context.Contacts.FirstOrDefaultAsync(c => c.Userid == user.Id && c.Friendid == currentUserId);
+
+            string relationStatus = "none";
+            if (contactAtoB != null && contactAtoB.Status == "accepted") relationStatus = "friend";
+            else if (contactAtoB != null && contactAtoB.Status == "pending") relationStatus = "pending"; // Mình đã gửi
+            else if (contactBtoA != null && contactBtoA.Status == "pending") relationStatus = "awaiting"; // Họ gửi, mình đang chờ đồng ý
 
             return Ok(new
             {
@@ -34,73 +39,87 @@ namespace ChatApp.Api.Controllers
                 email = user.Email,
                 fullName = user.Fullname,
                 avatarUrl = user.Avatarurl,
+                coverUrl = user.Coverurl,
                 bio = user.Bio,
-                isFriend = isFriend
+                relationStatus = relationStatus, // 🎯 Trả về trạng thái thực tế
+                isFriend = (relationStatus == "friend") // Giữ lại biến này phòng hờ code cũ
             });
         }
 
         // ==========================================
-        // 2. KẾT BẠN (XỬ LÝ 2 CHIỀU)
-        // POST: api/contacts/add
+        // 2. KẾT BẠN (XỬ LÝ 4 TRẠNG THÁI)
         // ==========================================
         [HttpPost("add")]
         public async Task<IActionResult> AddFriend([FromBody] AddContactRequest request)
         {
-            // 🎯 Lấy cả 2 chiều của mối quan hệ
-            var contactAtoB = await _context.Contacts
-                .FirstOrDefaultAsync(c => c.Userid == request.UserId && c.Friendid == request.FriendId);
-                
-            var contactBtoA = await _context.Contacts
-                .FirstOrDefaultAsync(c => c.Userid == request.FriendId && c.Friendid == request.UserId);
+            var contactAtoB = await _context.Contacts.FirstOrDefaultAsync(c => c.Userid == request.UserId && c.Friendid == request.FriendId);
+            var contactBtoA = await _context.Contacts.FirstOrDefaultAsync(c => c.Userid == request.FriendId && c.Friendid == request.UserId);
 
-            // NẾU ĐÃ CÓ BẤT KỲ CHIỀU NÀO -> HỦY KẾT BẠN (XÓA SẠCH)
-            if (contactAtoB != null || contactBtoA != null)
+            // TH1: ĐANG LÀ BẠN BÈ -> HỦY KẾT BẠN
+            if (contactAtoB != null && contactAtoB.Status == "accepted")
             {
-                if (contactAtoB != null) _context.Contacts.Remove(contactAtoB);
+                _context.Contacts.Remove(contactAtoB);
                 if (contactBtoA != null) _context.Contacts.Remove(contactBtoA);
-                
                 await _context.SaveChangesAsync();
-                return Ok(new { message = "Đã hủy kết bạn", isFriend = false });
+                return Ok(new { message = "Đã hủy kết bạn", status = "none" });
             }
 
-            // NẾU CHƯA CÓ -> THÊM KẾT BẠN 2 CHIỀU
-            var newContactAtoB = new Contact
+            // TH2: MÌNH ĐÃ GỬI YÊU CẦU TRƯỚC ĐÓ -> HỦY YÊU CẦU
+            if (contactAtoB != null && contactAtoB.Status == "pending")
+            {
+                _context.Contacts.Remove(contactAtoB);
+                await _context.SaveChangesAsync();
+                return Ok(new { message = "Đã thu hồi yêu cầu kết bạn", status = "none" });
+            }
+
+            // TH3: NGƯỜI KIA ĐÃ GỬI YÊU CẦU -> MÌNH ĐỒNG Ý
+            if (contactBtoA != null && contactBtoA.Status == "pending")
+            {
+                contactBtoA.Status = "accepted"; // Cập nhật chiều B -> A thành bạn
+                
+                // Thêm chiều A -> B thành bạn
+                var newContactAtoB = new Contact
+                {
+                    Userid = request.UserId,
+                    Friendid = request.FriendId,
+                    Status = "accepted",
+                    Createdat = DateTime.UtcNow
+                };
+                _context.Contacts.Add(newContactAtoB);
+                await _context.SaveChangesAsync();
+                
+                return Ok(new { message = "Đã chấp nhận kết bạn", status = "friend" });
+            }
+
+            // TH4: CHƯA CÓ GÌ -> GỬI YÊU CẦU KẾT BẠN MỚI
+            var pendingContact = new Contact
             {
                 Userid = request.UserId,
                 Friendid = request.FriendId,
-                Status = "accepted", 
+                Status = "pending", // 🎯 Đã sửa thành Pending (Chờ xác nhận)
                 Createdat = DateTime.UtcNow
             };
-
-            var newContactBtoA = new Contact
-            {
-                Userid = request.FriendId,
-                Friendid = request.UserId,
-                Status = "accepted", 
-                Createdat = DateTime.UtcNow
-            };
-
-            _context.Contacts.AddRange(newContactAtoB, newContactBtoA);
+            _context.Contacts.Add(pendingContact);
             await _context.SaveChangesAsync();
 
-            return Ok(new { message = "Đã thêm bạn bè thành công", isFriend = true });
+            return Ok(new { message = "Đã gửi yêu cầu kết bạn", status = "pending" });
         }
 
         // ==========================================
-        // 3. LẤY DANH SÁCH BẠN BÈ ĐỂ HIỂN THỊ
-        // GET: api/contacts/list/{userId}
+        // 3. LẤY DANH SÁCH BẠN BÈ (CHỈ LẤY NGƯỜI ĐÃ ACCEPT)
         // ==========================================
         [HttpGet("list/{userId}")]
         public async Task<IActionResult> GetFriendsList(Guid userId)
         {
+            // 🎯 Lọc chặt chẽ: Chỉ trả về những ai có Status = "accepted"
             var friends = await _context.Contacts
-                .Where(c => c.Userid == userId)
+                .Where(c => c.Userid == userId && c.Status == "accepted")
                 .Select(c => new
                 {
-                    // Lưu ý: C# lấy thông tin thông qua Navigation Property 'Friend'
                     id = c.Friend.Id,
                     name = c.Friend.Fullname,
                     avatarUrl = c.Friend.Avatarurl,
+                    coverUrl = c.Friend.Coverurl,
                     bio = c.Friend.Bio
                 }).ToListAsync();
 
