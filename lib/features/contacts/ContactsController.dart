@@ -79,12 +79,19 @@ class ContactsController extends ChangeNotifier {
   }
 
   // 2. Tìm người dùng theo Email (Trả về Dữ liệu)
-  Future<Map<String, dynamic>?> searchUser(String email) async {
+  Future<Map<String, dynamic>?> searchUser(String email, {BuildContext? context}) async {
     String currentUserId = await AuthController().getCurrentUserId();
     try {
       final response = await http.get(Uri.parse('$_baseUrl/search?email=$email&currentUserId=$currentUserId'));
+      
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
+      } else {
+        // 🎯 LẤY LỖI "TÌM CHÍNH MÌNH" TỪ BACKEND VÀ HIỂN THỊ SNACKBAR
+        if (context != null && context.mounted) {
+          final msg = jsonDecode(response.body)['message'] ?? "Lỗi tìm kiếm";
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.redAccent));
+        }
       }
     } catch (e) {
       debugPrint("Lỗi tìm kiếm: $e");
@@ -96,7 +103,9 @@ class ContactsController extends ChangeNotifier {
   Future<void> searchGlobalUser(BuildContext context, String email) async {
     if (email.trim().isEmpty) return;
 
-    var result = await searchUser(email.trim());
+    // 🎯 ĐÃ SỬA CHỖ NÀY: Truyền context vào để hàm searchUser có thể bung SnackBar lỗi
+    var result = await searchUser(email.trim(), context: context); 
+    
     if (result != null) {
       selectedFriend = {
         'id': result['id'],
@@ -110,8 +119,11 @@ class ContactsController extends ChangeNotifier {
       };
       notifyListeners();
     } else {
+      // Vì lỗi "tìm chính mình" đã được show ở searchUser, nên đoạn dưới đây tui thêm check
+      // để nếu không tìm thấy thật thì mới báo lỗi này, tránh báo 2 lỗi cùng lúc.
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Không tìm thấy người dùng này trên hệ thống!')));
+        // Có thể ẩn dòng thông báo chung chung này đi nếu muốn, hoặc giữ nguyên cũng được.
+        // ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Không tìm thấy người dùng này trên hệ thống!')));
       }
     }
   }
@@ -140,7 +152,6 @@ class ContactsController extends ChangeNotifier {
   Future<void> toggleFriendStatusFromPanel() async {
     if (selectedFriend == null) return;
     
-    // 🎯 Đã sửa kiểu `bool` thành `String` để khớp với API mới
     String newStatus = await toggleFriendStatus(selectedFriend!['id']);
     
     // Cập nhật lại dữ liệu để UI thay đổi theo

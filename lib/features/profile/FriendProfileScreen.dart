@@ -234,32 +234,33 @@ class _FriendProfileScreenState extends State<FriendProfileScreen> {
                   Text(widget.bio, style: TextStyle(color: subtitleColor, fontSize: 16), textAlign: TextAlign.center),
                   const SizedBox(height: 24),
 
-                  // --- NÚT TƯƠNG TÁC NHANH ---
+                  // ==========================================
+                  // 🎯 ĐÃ THÁO BỌC IF(ISFRIEND) Ở ĐÂY
+                  // NÚT TƯƠNG TÁC NHANH (LUÔN LUÔN HIỆN)
+                  // ==========================================
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      if (isFriend) ...[
-                        _HoverableActionCard(
-                          icon: Icons.chat_bubble_rounded, label: 'Nhắn tin',
-                          primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor,
-                          onTap: () => Navigator.pop(context),
-                        ),
-                        const SizedBox(width: 16),
-                        _HoverableActionCard(
-                          icon: Icons.call_rounded, label: 'Gọi thoại',
-                          primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor,
-                          onTap: () => Navigator.push(context, PageRouteBuilder(opaque: false, pageBuilder: (context, animation, _) => CallScreen(isVideoCall: false, userName: widget.userName, avatarUrl: widget.avatarUrl.isEmpty ? 'https://i.pravatar.cc/150?u=${widget.userId}' : widget.avatarUrl))),
-                        ),
-                        const SizedBox(width: 16),
-                        _HoverableActionCard(
-                          icon: Icons.videocam_rounded, label: 'Gọi video',
-                          primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor,
-                          onTap: () => Navigator.push(context, PageRouteBuilder(opaque: false, pageBuilder: (context, animation, _) => CallScreen(isVideoCall: true, userName: widget.userName, avatarUrl: widget.avatarUrl.isEmpty ? 'https://i.pravatar.cc/150?u=${widget.userId}' : widget.avatarUrl))),
-                        ),
-                      ]
+                      _HoverableActionCard(
+                        icon: Icons.chat_bubble_rounded, label: 'Nhắn tin',
+                        primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor,
+                        onTap: () => Navigator.pop(context),
+                      ),
+                      const SizedBox(width: 16),
+                      _HoverableActionCard(
+                        icon: Icons.call_rounded, label: 'Gọi thoại',
+                        primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor,
+                        onTap: () => Navigator.push(context, PageRouteBuilder(opaque: false, pageBuilder: (context, animation, _) => CallScreen(isVideoCall: false, userName: widget.userName, avatarUrl: widget.avatarUrl.isEmpty ? 'https://i.pravatar.cc/150?u=${widget.userId}' : widget.avatarUrl))),
+                      ),
+                      const SizedBox(width: 16),
+                      _HoverableActionCard(
+                        icon: Icons.videocam_rounded, label: 'Gọi video',
+                        primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor,
+                        onTap: () => Navigator.push(context, PageRouteBuilder(opaque: false, pageBuilder: (context, animation, _) => CallScreen(isVideoCall: true, userName: widget.userName, avatarUrl: widget.avatarUrl.isEmpty ? 'https://i.pravatar.cc/150?u=${widget.userId}' : widget.avatarUrl))),
+                      ),
                     ],
                   ),
-                  if (isFriend) const SizedBox(height: 24),
+                  const SizedBox(height: 24), // 🎯 Luôn giữ khoảng cách
 
                   // ==========================================
                   // NÚT KẾT BẠN / HỦY BẠN LỚN NHẤT

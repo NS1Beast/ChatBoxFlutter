@@ -1,13 +1,15 @@
 // ignore_file: file_names
-import 'dart:convert'; // 🎯 Thêm cái này để giải mã ảnh
+import 'dart:convert'; 
 import 'package:flutter/material.dart';
 
-import '../../profile/FriendProfileScreen.dart'; 
 import '../../contacts/ContactsController.dart'; 
 
 class ChatListPanel extends StatefulWidget {
-  final Function(String) onChatSelected;
-  const ChatListPanel({super.key, required this.onChatSelected});
+  // 🎯 SỬA LẠI: TRUYỀN FULL OBJECT USER THAY VÌ CHỈ TRUYỀN ID STRING
+  final Function(Map<String, dynamic>) onChatSelected;
+  final Function(Map<String, dynamic>)? onGlobalSearchFound; 
+  
+  const ChatListPanel({super.key, required this.onChatSelected, this.onGlobalSearchFound});
 
   @override
   State<ChatListPanel> createState() => _ChatListPanelState();
@@ -38,7 +40,6 @@ class _ChatListPanelState extends State<ChatListPanel> {
     super.dispose();
   }
 
-  // 🎯 HÀM LẤY AVATAR THÔNG MINH CHO DANH SÁCH CHAT
   ImageProvider _getSmartAvatar(String? avatarUrl, String userId) {
     if (avatarUrl != null && avatarUrl.isNotEmpty && avatarUrl.toLowerCase() != 'null') {
       if (avatarUrl.startsWith('data:image')) {
@@ -60,26 +61,13 @@ class _ChatListPanelState extends State<ChatListPanel> {
   void _performSearch(String query) async {
     if (query.trim().isEmpty) return;
     
-    var result = await _contactController.searchUser(query.trim());
+    var result = await _contactController.searchUser(query.trim(), context: context);
     
     if (result != null && mounted) {
-      Navigator.push(context, MaterialPageRoute(
-        builder: (context) => FriendProfileScreen(
-          userId: result['id'], 
-          userName: result['fullName'] ?? 'Người dùng',
-          avatarUrl: result['avatarUrl'] ?? '',
-          coverImageUrl: result['coverUrl'] ?? '', // 🎯 Móc luôn ảnh bìa sang
-          bio: result['bio'] ?? 'Chưa có thông tin',
-          
-          // 🎯 ĐÃ ĐỔI TÊN BIẾN THEO CHUẨN MỚI NHẤT
-          initialRelationStatus: result['relationStatus'] ?? 'none', 
-          
-          contactController: _contactController, 
-        ),
-      ));
+      if (widget.onGlobalSearchFound != null) {
+        widget.onGlobalSearchFound!(result); 
+      }
       _searchCtrl.clear();
-    } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Không tìm thấy người dùng này!')));
     }
   }
 
@@ -122,16 +110,16 @@ class _ChatListPanelState extends State<ChatListPanel> {
                 itemBuilder: (context, index) {
                   final friend = friends[index];
 
-                  // 🎯 LẤY ẢNH VÀ TRUYỀN VÀO DƯỚI DẠNG IMAGE PROVIDER
                   ImageProvider avatarProvider = _getSmartAvatar(friend['avatarUrl'], friend['id']);
 
                   return _HoverableChatItem(
                     name: friend['name'] ?? 'Bạn bè',
-                    avatarProvider: avatarProvider, // 🎯 Sửa lại tham số truyền vào
+                    avatarProvider: avatarProvider, 
                     isSelected: _selectedChatId == friend['id'],
                     onTap: () {
                       setState(() => _selectedChatId = friend['id']);
-                      widget.onChatSelected(friend['id']);
+                      // 🎯 TRUYỀN TOÀN BỘ OBJECT SANG DASHBOARD ĐỂ NÓ BƠM VÀO MAIN CHAT
+                      widget.onChatSelected(friend); 
                     },
                   );
                 },
@@ -145,7 +133,7 @@ class _ChatListPanelState extends State<ChatListPanel> {
 
 class _HoverableChatItem extends StatefulWidget {
   final String name;
-  final ImageProvider avatarProvider; // 🎯 CHUYỂN TỪ STRING SANG IMAGEPROVIDER
+  final ImageProvider avatarProvider; 
   final bool isSelected;
   final VoidCallback onTap;
 
@@ -184,7 +172,7 @@ class _HoverableChatItemState extends State<_HoverableChatItem> {
           ),
           child: Row(
             children: [
-              CircleAvatar(radius: 24, backgroundImage: widget.avatarProvider), // 🎯 GẮN PROVIDER VÀO ĐÂY
+              CircleAvatar(radius: 24, backgroundImage: widget.avatarProvider), 
               const SizedBox(width: 12),
               Expanded(
                 child: Text(widget.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor)),

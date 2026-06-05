@@ -12,6 +12,8 @@ import '../../profile/ProfileController.dart';
 import '../../../core/theme/theme_controller.dart'; 
 import '../../settings/settings_controller.dart'; 
 import '../../auth/AuthController.dart';
+import '../../profile/FriendProfileScreen.dart'; 
+import '../../contacts/ContactsController.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -22,36 +24,34 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
-  String? _activeChatId;
+  Map<String, dynamic>? _searchedUser; 
+  final ContactsController _globalContactsController = ContactsController();
+
+  // LƯU TOÀN BỘ THÔNG TIN NGƯỜI ĐANG CHAT ĐỂ BƠM VÀO MAIN CHAT AREA
+  Map<String, dynamic>? _activeChatUser;
 
   @override
   void initState() {
     super.initState();
-    // VỪA VÀO DASHBOARD LÀ ÉP NẠP GIAO DIỆN NGAY!
     _loadUserTheme();
   }
 
   Future<void> _loadUserTheme() async {
     final authController = AuthController();
     final settingsController = SettingsController();
-    
-    // 1. Lấy ID của tài khoản đang đăng nhập
     String userId = await authController.getCurrentUserId();
-    
-    // 2. Chui vào ổ cứng móc cấu hình của riêng user này ra
     await settingsController.loadSettingsForUser(userId);
-    
-    // 3. Thay áo cho toàn bộ App ngay tắp lự
     themeController.changePrimaryColor(Color(settingsController.primaryColorValue));
     themeController.toggleDarkMode(settingsController.isDarkMode);
     await ProfileController().loadUserProfile(userId);
   }
 
-  // 🎯 HÀM LẮNG NGHE YÊU CẦU "CHUYỂN SANG TAB CHAT" TỪ DANH BẠ
-  void _handleStartChat(String friendId) {
+  // HÀM LẮNG NGHE YÊU CẦU "CHUYỂN SANG TAB CHAT" (Nhận Full Object User)
+  void _handleStartChat(Map<String, dynamic> user) {
     setState(() {
-      _selectedIndex = 0; // Kích hoạt tab số 0 (Icon Tin nhắn)
-      _activeChatId = friendId; // Đặt ID người chat để mở đúng màn hình
+      _selectedIndex = 0; // Kích hoạt tab Chat
+      _activeChatUser = user; // Lưu thông tin người chat
+      _searchedUser = null; // Đóng cái khung Profile bên phải (nếu đang mở)
     });
   }
 
@@ -62,30 +62,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
       body: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // 1. Navigation
           ChatNavigationRail(
             selectedIndex: _selectedIndex,
             onDestinationSelected: (int index) {
-              setState(() {
-                _selectedIndex = index;
-              });
+              setState(() { _selectedIndex = index; });
             },
           ),
           
-          // 2. Khu vực nội dung chính
           Expanded(
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 400),
               transitionBuilder: (Widget child, Animation<double> animation) {
-                return FadeTransition(
-                  opacity: animation,
-                  child: SlideTransition(
-                    position: Tween<Offset>(begin: const Offset(0.0, 0.05), end: Offset.zero).animate(animation),
-                    child: child,
-                  ),
-                );
+                return FadeTransition(opacity: animation, child: SlideTransition(position: Tween<Offset>(begin: const Offset(0.0, 0.05), end: Offset.zero).animate(animation), child: child));
               },
-              
               child: Builder(
                 key: ValueKey(_selectedIndex),
                 builder: (context) {
@@ -96,46 +85,66 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         children: [
                           Container(
                             width: 320,
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.surface,
-                              border: Border(right: BorderSide(color: Colors.grey.withValues(alpha: 0.2), width: 1)),
-                            ),
+                            decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, border: Border(right: BorderSide(color: Colors.grey.withValues(alpha: 0.2), width: 1))),
                             child: ChatListPanel(
-                              onChatSelected: (chatId) {
+                              // 🎯 ĐÃ ĐỔI TÊN THAM SỐ Ở ĐÂY LUÔN CHO ĐỒNG BỘ
+                              onChatSelected: (userMap) {
                                 setState(() {
-                                  _activeChatId = chatId;
+                                  _activeChatUser = userMap; 
+                                  _searchedUser = null; 
+                                });
+                              },
+                              onGlobalSearchFound: (user) {
+                                setState(() {
+                                  _searchedUser = user;
+                                  _activeChatUser = null; // Tắt chat để hiện Profile
                                 });
                               },
                             ), 
                           ),
                           
                           Expanded(
-                            child: _activeChatId != null 
-                                ? const MainChatArea() 
-                                // (Tương lai khi DB thật: Bơm ID xuống MainChatArea như vầy nè)
-                                // ? MainChatArea(chatId: _activeChatId!) 
-                                : const WelcomeScreen(), 
+                            child: _searchedUser != null 
+                              ? FriendProfileScreen(
+                                  userId: _searchedUser!['id'],
+                                  userName: _searchedUser!['fullName'] ?? 'Người dùng',
+                                  avatarUrl: _searchedUser!['avatarUrl'] ?? '',
+                                  coverImageUrl: _searchedUser!['coverUrl'] ?? '',
+                                  bio: _searchedUser!['bio'] ?? '',
+                                  initialRelationStatus: _searchedUser!['relationStatus'] ?? 'none',
+                                  contactController: _globalContactsController,
+                                )
+                              : _activeChatUser != null 
+                                  ? MainChatArea(
+                                      chatId: _activeChatUser!['id'],
+                                      chatName: _activeChatUser!['fullName'] ?? _activeChatUser!['name'] ?? 'Người dùng',
+                                      chatAvatar: _activeChatUser!['avatarUrl'] ?? '',
+                                      chatCover: _activeChatUser!['coverUrl'] ?? '',
+                                      chatBio: _activeChatUser!['bio'] ?? '',
+                                      relationStatus: _activeChatUser!['relationStatus'] ?? 'friend',
+                                    ) 
+                                  : const WelcomeScreen(), 
                           ), 
                         ],
                       );
 
                     case 1: 
-                      // 🎯 GẮN CÁP KÍCH HOẠT HÀM ĐIỀU HƯỚNG VÀO ContactsScreen
                       return ContactsScreen(
-                        onStartChat: _handleStartChat,
+                        onStartChat: (String userId) {
+                          _handleStartChat({
+                            'id': userId,
+                            'name': 'Người dùng', 
+                            'avatarUrl': '',
+                            'bio': '',
+                          });
+                        }
                       );
-                      
                     case 2: return const TimelineScreen();
                     case 3: return const NotificationsScreen();
                     case 4: return const SettingsScreen();
 
                     default:
-                      return Center(
-                        child: Text(
-                          'Tính năng đang phát triển',
-                          style: TextStyle(fontSize: 18, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
-                        )
-                      );
+                      return Center(child: Text('Tính năng đang phát triển', style: TextStyle(fontSize: 18, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6))));
                   }
                 },
               ),

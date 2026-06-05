@@ -23,7 +23,8 @@ namespace ChatApp.Api.Controllers
         {
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
             if (user == null) return NotFound(new { message = "Không tìm thấy người dùng nào với Email này!" });
-
+            if (user.Id == currentUserId) 
+                return BadRequest(new { message = "Bạn không thể tìm kiếm chính mình!" });
             // 🎯 Lấy thông tin 2 chiều để xét trạng thái
             var contactAtoB = await _context.Contacts.FirstOrDefaultAsync(c => c.Userid == currentUserId && c.Friendid == user.Id);
             var contactBtoA = await _context.Contacts.FirstOrDefaultAsync(c => c.Userid == user.Id && c.Friendid == currentUserId);

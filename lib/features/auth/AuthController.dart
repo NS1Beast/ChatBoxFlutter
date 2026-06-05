@@ -38,6 +38,23 @@ class AuthController extends ChangeNotifier {
   // ==========================================
   // HÀM QUẢN LÝ LOADING
   // ==========================================
+  void backRegisterStep() {
+    if (registerStep > 1) {
+      registerStep--;
+      notifyListeners();
+    } else {
+      switchForm(AuthFormType.login);
+    }
+  }
+
+  void backForgotStep() {
+    if (forgotStep > 1) {
+      forgotStep--;
+      notifyListeners();
+    } else {
+      switchForm(AuthFormType.login);
+    }
+  }
   void _setLoading(bool value) {
     isLoading = value;
     notifyListeners();

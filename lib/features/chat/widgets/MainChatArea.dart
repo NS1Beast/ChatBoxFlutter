@@ -6,11 +6,26 @@ import '../../call/CallScreen.dart';
 import '../models/chat_message.dart';
 import 'HoverableMessageBubble.dart';
 import 'ChatInputArea.dart'; 
-// 🎯 IMPORT THÊM ĐỂ MỞ PROFILE
 import '../../contacts/ContactsController.dart'; 
 
 class MainChatArea extends StatefulWidget {
-  const MainChatArea({super.key});
+  // 🎯 NHẬN THÔNG TIN CỦA NGƯỜI ĐANG CHAT (Dữ liệu thật)
+  final String chatId;
+  final String chatName;
+  final String chatAvatar;
+  final String chatCover;
+  final String chatBio;
+  final String relationStatus; 
+
+  const MainChatArea({
+    super.key, 
+    required this.chatId,
+    required this.chatName,
+    required this.chatAvatar,
+    this.chatCover = '',
+    this.chatBio = '',
+    this.relationStatus = 'friend',
+  });
 
   @override
   State<MainChatArea> createState() => _MainChatAreaState();
@@ -20,7 +35,6 @@ class _MainChatAreaState extends State<MainChatArea> {
   final ScrollController _scrollController = ScrollController();
   bool _showInfoPanel = false;
   
-  // 🎯 KHAI BÁO CONTROLLER TẠI ĐÂY
   final ContactsController _contactController = ContactsController();
 
   List<ChatMessage> messages = [];
@@ -28,21 +42,19 @@ class _MainChatAreaState extends State<MainChatArea> {
   @override
   void dispose() {
     _scrollController.dispose();
-    _contactController.dispose(); // Nhớ giải phóng bộ nhớ
+    _contactController.dispose(); 
     super.dispose();
   }
 
-  // 🎯 ĐÃ BỔ SUNG ĐỦ THAM SỐ CHO PROFILE CẢI TIẾN
+  // 🎯 MỞ PROFILE CỦA NGƯỜI ĐANG CHAT HIỆN TẠI
   void _openUserProfile() {
     Navigator.push(context, MaterialPageRoute(builder: (context) => FriendProfileScreen(
-      userId: 'mock_user_id', // ID tạm thời cho màn hình Chat giả lập
-      userName: 'Trần Thị B', 
-      avatarUrl: 'https://i.pravatar.cc/150?img=20', 
-      bio: 'Yêu màu hồng, ghét sự giả dối 🌸', 
-      
-      // 🎯 ĐÃ ĐỔI TÊN BIẾN THEO CHUẨN 3 TRẠNG THÁI MỚI
-      initialRelationStatus: 'friend', 
-      
+      userId: widget.chatId, 
+      userName: widget.chatName, 
+      avatarUrl: widget.chatAvatar, 
+      coverImageUrl: widget.chatCover,
+      bio: widget.chatBio, 
+      initialRelationStatus: widget.relationStatus, 
       contactController: _contactController, 
     )));
   }
@@ -136,7 +148,8 @@ class _MainChatAreaState extends State<MainChatArea> {
         children: [
           Icon(Icons.chat_bubble_outline_rounded, size: 64, color: textColor.withValues(alpha: 0.2)),
           const SizedBox(height: 16),
-          Text('Chưa có tin nhắn nào.\nHãy gửi lời chào đến Trần Thị B!', textAlign: TextAlign.center, style: TextStyle(color: textColor.withValues(alpha: 0.5), fontSize: 15)),
+          // 🎯 HIỂN THỊ TÊN THẬT CỦA NGƯỜI ĐANG CHAT
+          Text('Chưa có tin nhắn nào.\nHãy gửi lời chào đến ${widget.chatName}!', textAlign: TextAlign.center, style: TextStyle(color: textColor.withValues(alpha: 0.5), fontSize: 15)),
         ],
       ),
     );
@@ -154,7 +167,8 @@ class _MainChatAreaState extends State<MainChatArea> {
               onTap: _openUserProfile,
               child: Stack(
                 children: [
-                  const CircleAvatar(radius: 22, backgroundImage: NetworkImage('https://i.pravatar.cc/150?img=20')),
+                  // 🎯 DÙNG ẢNH THẬT
+                  CircleAvatar(radius: 22, backgroundImage: NetworkImage(widget.chatAvatar.isNotEmpty ? widget.chatAvatar : 'https://i.pravatar.cc/150?u=${widget.chatId}')),
                   Positioned(right: 0, bottom: 0, child: Container(width: 12, height: 12, decoration: BoxDecoration(color: Colors.green, shape: BoxShape.circle, border: Border.all(color: surfaceColor, width: 2)))),
                 ],
               ),
@@ -165,13 +179,15 @@ class _MainChatAreaState extends State<MainChatArea> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                MouseRegion(cursor: SystemMouseCursors.click, child: GestureDetector(onTap: _openUserProfile, child: Text('Trần Thị B', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)))),
+                // 🎯 DÙNG TÊN THẬT
+                MouseRegion(cursor: SystemMouseCursors.click, child: GestureDetector(onTap: _openUserProfile, child: Text(widget.chatName, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)))),
                 Text('Đang hoạt động', style: TextStyle(fontSize: 13, color: primaryColor)),
               ],
             ),
           ),
-          IconButton(icon: Icon(Icons.call_outlined, color: primaryColor), onPressed: () => Navigator.push(context, PageRouteBuilder(opaque: false, pageBuilder: (context, animation, secondaryAnimation) => const CallScreen(isVideoCall: false, userName: 'Trần Thị B', avatarUrl: 'https://i.pravatar.cc/150?img=20')))),
-          IconButton(icon: Icon(Icons.videocam_outlined, color: primaryColor), onPressed: () => Navigator.push(context, PageRouteBuilder(opaque: false, pageBuilder: (context, animation, secondaryAnimation) => const CallScreen(isVideoCall: true, userName: 'Trần Thị B', avatarUrl: 'https://i.pravatar.cc/150?img=20')))),
+          // 🎯 NỐI ẢNH VÀ TÊN THẬT VÀO NÚT GỌI
+          IconButton(icon: Icon(Icons.call_outlined, color: primaryColor), onPressed: () => Navigator.push(context, PageRouteBuilder(opaque: false, pageBuilder: (context, animation, secondaryAnimation) => CallScreen(isVideoCall: false, userName: widget.chatName, avatarUrl: widget.chatAvatar.isNotEmpty ? widget.chatAvatar : 'https://i.pravatar.cc/150?u=${widget.chatId}')))),
+          IconButton(icon: Icon(Icons.videocam_outlined, color: primaryColor), onPressed: () => Navigator.push(context, PageRouteBuilder(opaque: false, pageBuilder: (context, animation, secondaryAnimation) => CallScreen(isVideoCall: true, userName: widget.chatName, avatarUrl: widget.chatAvatar.isNotEmpty ? widget.chatAvatar : 'https://i.pravatar.cc/150?u=${widget.chatId}')))),
           IconButton(icon: Icon(_showInfoPanel ? Icons.info_rounded : Icons.info_outline, color: _showInfoPanel ? primaryColor : textColor.withValues(alpha: 0.6)), onPressed: () => setState(() => _showInfoPanel = !_showInfoPanel)),
         ],
       ),
@@ -191,9 +207,10 @@ class _MainChatAreaState extends State<MainChatArea> {
       child: Column(
         children: [
           const SizedBox(height: 32),
-          const CircleAvatar(radius: 48, backgroundImage: NetworkImage('https://i.pravatar.cc/150?img=20')),
+          // 🎯 DÙNG ẢNH VÀ TÊN THẬT
+          CircleAvatar(radius: 48, backgroundImage: NetworkImage(widget.chatAvatar.isNotEmpty ? widget.chatAvatar : 'https://i.pravatar.cc/150?u=${widget.chatId}')),
           const SizedBox(height: 16),
-          Text('Trần Thị B', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textColor)),
+          Text(widget.chatName, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textColor)),
           Text('Trực tuyến', style: TextStyle(fontSize: 14, color: textColor.withValues(alpha: 0.5))),
           const SizedBox(height: 24),
           Row(

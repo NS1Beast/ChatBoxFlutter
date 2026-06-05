@@ -1,6 +1,6 @@
-// Đường dẫn: lib/features/auth/LoginScreen.dart
+// ignore_file: file_names
 import 'package:flutter/material.dart';
-import '../chat/screens/DashboardScreen.dart'; 
+import '../chat/screens/DashboardScreen.dart';
 import 'AuthController.dart'; 
 
 class LoginScreen extends StatefulWidget {
@@ -47,7 +47,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
   // --- HÀM XỬ LÝ LOGIN ---
   void _handleLogin() async {
-    // Không khóa bàn phím, để nguyên cho User xem cái xoay tròn trên nút bấm là đủ
     bool success = await _controller.login(_emailCtrl.text.trim(), _passCtrl.text);
     if (success && mounted) {
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const DashboardScreen()));
@@ -149,7 +148,6 @@ class _LoginScreenState extends State<LoginScreen> {
         SizedBox(
           width: double.infinity,
           child: OutlinedButton.icon(
-            // Khóa nút nếu đang loading
             onPressed: _controller.isLoading ? null : _handleGoogleAuth,
             icon: _controller.isLoading 
                 ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.redAccent))
@@ -191,7 +189,6 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 24),
               
               FilledButton(
-                // 🎯 KIỂM TRA LOADING ĐỂ KHÓA NÚT VÀ HIỆN VÒNG QUAY
                 onPressed: _controller.isLoading ? null : _handleLogin,
                 style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 20), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), elevation: 5, shadowColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5)),
                 child: _controller.isLoading 
@@ -294,14 +291,8 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 32),
               Center(
                 child: TextButton(
-                  onPressed: () {
-                    if (_controller.registerStep > 1) {
-                      _controller.registerStep--;
-                      _controller.notifyListeners();
-                    } else {
-                      _controller.switchForm(AuthFormType.login);
-                    }
-                  },
+                  // 🎯 ĐÃ GỌI HÀM CỦA CONTROLLER CHUẨN XÁC, KHÔNG CÒN LỖI ĐỎ
+                  onPressed: () => _controller.backRegisterStep(),
                   child: Text(_controller.registerStep > 1 ? '← Quay lại bước trước' : '← Quay lại Đăng nhập', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Theme.of(context).colorScheme.primary)),
                 ),
               ),
@@ -381,14 +372,8 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 32),
               Center(
                 child: TextButton(
-                  onPressed: () {
-                    if (_controller.forgotStep > 1) {
-                      _controller.forgotStep--;
-                      _controller.notifyListeners();
-                    } else {
-                      _controller.switchForm(AuthFormType.login);
-                    }
-                  },
+                  // 🎯 ĐÃ GỌI HÀM CỦA CONTROLLER CHUẨN XÁC, KHÔNG CÒN LỖI ĐỎ
+                  onPressed: () => _controller.backForgotStep(),
                   child: Text(_controller.forgotStep > 1 ? '← Quay lại bước trước' : '← Quay lại Đăng nhập', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Theme.of(context).colorScheme.primary)),
                 ),
               ),

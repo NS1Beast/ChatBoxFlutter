@@ -229,7 +229,6 @@ class _ContactsScreenState extends State<ContactsScreen> {
       );
     }
 
-    // 🎯 HỨNG BIẾN CHUỖI TRẠNG THÁI (Đã sửa từ bool thành String)
     String relationStatus = friend['relationStatus'] ?? (friend['isFriend'] == true ? 'friend' : 'none');
     bool isFriend = (relationStatus == 'friend');
 
@@ -248,43 +247,42 @@ class _ContactsScreenState extends State<ContactsScreen> {
               Text(friend['bio'] ?? 'Chưa có thông tin giới thiệu', style: TextStyle(color: primaryColor, fontSize: 15, fontStyle: FontStyle.italic)),
               const SizedBox(height: 32),
               
+              // 🎯 ĐÃ THÁO BỎ LỆNH IF (ISFRIEND) Ở ĐÂY ĐỂ LUÔN HIỆN NÚT NHẮN TIN / GỌI
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  if (isFriend) ...[
-                    _HoverableActionCard(
-                      icon: Icons.chat_bubble_rounded, 
-                      label: 'Nhắn tin', 
-                      primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor, 
-                      onTap: () {
-                        if (widget.onStartChat != null) {
-                          widget.onStartChat!(friend['id']);
-                        } else {
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Bắt đầu nhắn tin với ${friend['name']}')));
-                        }
+                  _HoverableActionCard(
+                    icon: Icons.chat_bubble_rounded, 
+                    label: 'Nhắn tin', 
+                    primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor, 
+                    onTap: () {
+                      if (widget.onStartChat != null) {
+                        widget.onStartChat!(friend['id']);
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Bắt đầu nhắn tin với ${friend['name']}')));
                       }
-                    ),
-                    const SizedBox(width: 16),
-                    _HoverableActionCard(
-                      icon: Icons.call_rounded, 
-                      label: 'Gọi thoại', 
-                      primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor, 
-                      onTap: () => Navigator.push(context, PageRouteBuilder(opaque: false, pageBuilder: (context, animation, _) => CallScreen(isVideoCall: false, userName: friend['name'], avatarUrl: friend['avatarUrl'] ?? '')))
-                    ),
-                    const SizedBox(width: 16),
-                    _HoverableActionCard(
-                      icon: Icons.videocam_rounded, 
-                      label: 'Gọi video', 
-                      primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor, 
-                      onTap: () => Navigator.push(context, PageRouteBuilder(opaque: false, pageBuilder: (context, animation, _) => CallScreen(isVideoCall: true, userName: friend['name'], avatarUrl: friend['avatarUrl'] ?? '')))
-                    ),
-                  ]
+                    }
+                  ),
+                  const SizedBox(width: 16),
+                  _HoverableActionCard(
+                    icon: Icons.call_rounded, 
+                    label: 'Gọi thoại', 
+                    primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor, 
+                    onTap: () => Navigator.push(context, PageRouteBuilder(opaque: false, pageBuilder: (context, animation, _) => CallScreen(isVideoCall: false, userName: friend['name'], avatarUrl: friend['avatarUrl'] ?? '')))
+                  ),
+                  const SizedBox(width: 16),
+                  _HoverableActionCard(
+                    icon: Icons.videocam_rounded, 
+                    label: 'Gọi video', 
+                    primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor, 
+                    onTap: () => Navigator.push(context, PageRouteBuilder(opaque: false, pageBuilder: (context, animation, _) => CallScreen(isVideoCall: true, userName: friend['name'], avatarUrl: friend['avatarUrl'] ?? '')))
+                  ),
                 ],
               ),
-              if (isFriend) const SizedBox(height: 24),
+              const SizedBox(height: 24), // 🎯 Luôn hiện khoảng trống này
 
               // ==========================================
-              // 🎯 NÚT KẾT BẠN / HỦY BẠN LỚN NHƯ BÊN TIMELINE
+              // 🎯 NÚT KẾT BẠN / HỦY BẠN LỚN NHẤT
               // ==========================================
               SizedBox(
                 width: double.infinity,
