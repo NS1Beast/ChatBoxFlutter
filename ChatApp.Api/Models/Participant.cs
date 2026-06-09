@@ -1,22 +1,29 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
-namespace ChatApp.Api.Models;
-
-public partial class Participant
+namespace ChatApp.Api.Models
 {
-    public Guid Conversationid { get; set; }
+    public class Participant
+    {
+        // 🎯 LƯU Ý: Nếu dùng EF Core, ông phải cấu hình Composite Key trong file DbContext bằng Fluent API
+        // (modelBuilder.Entity<Participant>().HasKey(p => new { p.ConversationId, p.UserId });)
+        
+        public Guid ConversationId { get; set; }
+        
+        public Guid UserId { get; set; }
+        
+        [MaxLength(20)]
+        public string Role { get; set; } = "member";
+        
+        public DateTime JoinedAt { get; set; } = DateTime.UtcNow;
+        
+        public Guid? LastReadMessageId { get; set; }
 
-    public Guid Userid { get; set; }
-
-    public string? Role { get; set; }
-
-    public DateTime? Joinedat { get; set; }
-
-    public Guid? Lastreadmessageid { get; set; }
-
-    public virtual Conversation Conversation { get; set; } = null!;
-
-    public virtual User User { get; set; } = null!;
-    public ChatSettings ChatSettings { get; set; } = new ChatSettings();
+        // Navigation properties (Tùy chọn)
+        [ForeignKey("ConversationId")]
+        public Conversation? Conversation { get; set; }
+        
+        [ForeignKey("UserId")]
+        public User? User { get; set; }
+    }
 }

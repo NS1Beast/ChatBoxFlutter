@@ -1,6 +1,8 @@
 // ignore_file: file_names
 import 'package:flutter/material.dart';
 import 'dart:typed_data';
+import 'package:flutter/scheduler.dart'; // 🎯 Thêm cái này để quản lý frame chính xác
+
 import 'ProfileController.dart'; 
 import '../../features/auth/AuthController.dart'; 
 
@@ -18,12 +20,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    _loadProfileData();
+    // 🎯 CHỜ ROUTE ANIMATION MỞ MÀN HÌNH CHẠY XONG XUÔI RỒI MỚI LOAD DATA NẶNG
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadProfileDataAfterRouteAnimation();
+    });
   }
 
-  Future<void> _loadProfileData() async {
+  Future<void> _loadProfileDataAfterRouteAnimation() async {
+    // Cho animation trượt trang hoàn tất êm ái, tránh xung đột phần cứng decode ảnh
+    await Future.delayed(const Duration(milliseconds: 280));
+    if (!mounted) return;
+
     _currentUserId = await AuthController().getCurrentUserId();
+    if (!mounted) return;
+
     await _controller.loadUserProfile(_currentUserId);
+    if (!mounted) return;
+
+    // 🎯 TIẾN HÀNH KHỞI TẠO CACHE ẢNH TRƯỚC KHI RENDER
+    await _precacheProfileImages();
+  }
+
+  Future<void> _precacheProfileImages() async {
+    final avatarUrl = _controller.avatarUrl;
+    final coverUrl = _controller.coverImageUrl;
+
+    try {
+      if (avatarUrl.isNotEmpty && avatarUrl.toLowerCase() != 'null') {
+        await precacheImage(NetworkImage(avatarUrl), context);
+      }
+      if (coverUrl.isNotEmpty && coverUrl.toLowerCase() != 'null') {
+        await precacheImage(NetworkImage(coverUrl), context);
+      }
+    } catch (e) {
+      debugPrint("Lỗi nạp trước ảnh profile: $e");
+    }
   }
 
   void _showEditProfileDialog() {
@@ -86,14 +117,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  ImageProvider _getAvatarImage() {
+  // 🎯 TRẢ VỀ NULLABLE IMAGEPROVIDER?, KHÔNG DÙNG EMPTY BYTES GÂY RÁC ENGINE ĐỌC ẢNH
+  ImageProvider? _getAvatarImage() {
     if (_controller.localAvatarBytes != null) {
       return MemoryImage(_controller.localAvatarBytes!); 
-    } else if (_controller.avatarUrl.isNotEmpty) {
+    } 
+    if (_controller.avatarUrl.isNotEmpty && _controller.avatarUrl.toLowerCase() != 'null') {
       return NetworkImage(_controller.avatarUrl); 
-    } else {
-      return MemoryImage(Uint8List(0)); 
     }
+    return null;
   }
 
   @override
@@ -103,85 +135,90 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final subtitleColor = Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6);
     final primaryColor = Theme.of(context).colorScheme.primary;
 
-    return ListenableBuilder(
-      listenable: _controller,
-      builder: (context, child) {
-        return Scaffold(
-          backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-          appBar: AppBar(
-            backgroundColor: Colors.transparent, elevation: 0,
-            leading: IconButton(icon: Icon(Icons.arrow_back, color: textColor), onPressed: () => Navigator.pop(context)),
-            title: Text('Hồ sơ của bạn', style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
-            centerTitle: true,
-          ),
-          body: Center(
-            child: SingleChildScrollView(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 600),
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
+    return Scaffold(
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent, elevation: 0,
+        leading: IconButton(icon: Icon(Icons.arrow_back, color: textColor), onPressed: () => Navigator.pop(context)),
+        title: Text('Hồ sơ của bạn', style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
+        centerTitle: true,
+      ),
+      body: Center(
+        child: SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 600),
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              
+              child: ListenableBuilder(
+                listenable: _controller,
+                builder: (context, child) {
+                  return Column(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      // --- KHU VỰC ẢNH BÌA & AVATAR ---
-                      SizedBox(
-                        height: 220,
-                        child: Stack(
-                          alignment: Alignment.bottomCenter,
-                          children: [
-                            Align(
-                              alignment: Alignment.topCenter,
-                              child: Stack(
+                      // =======================================================
+                      // 🎯 CO CỤM REPAINTBOUNDARY VỀ ĐÚNG KHU VỰC ẢNH ĐÈ NHAU NẶNG NHẤT
+                      // =======================================================
+                      RepaintBoundary(
+                        child: SizedBox(
+                          height: 220,
+                          child: Stack(
+                            alignment: Alignment.bottomCenter,
+                            children: [
+                              Align(
+                                alignment: Alignment.topCenter,
+                                child: Stack(
+                                  children: [
+                                    Container(
+                                      height: 160, width: double.infinity,
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(24),
+                                        gradient: LinearGradient(colors: [primaryColor, primaryColor.withValues(alpha: 0.6)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                                        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, 4))],
+                                        image: _controller.localCoverBytes != null 
+                                            ? DecorationImage(image: MemoryImage(_controller.localCoverBytes!), fit: BoxFit.cover)
+                                            : (_controller.coverImageUrl.isNotEmpty ? DecorationImage(image: NetworkImage(_controller.coverImageUrl), fit: BoxFit.cover) : null)
+                                      ),
+                                      child: (_controller.localCoverBytes == null && _controller.coverImageUrl.isEmpty) ? const Icon(Icons.auto_awesome, color: Colors.white24, size: 80) : null,
+                                    ),
+                                    Positioned(
+                                      top: 16, right: 16,
+                                      child: IconButton.filled(
+                                        onPressed: () => _controller.pickAndCropCover(context, _currentUserId),
+                                        icon: const Icon(Icons.add_a_photo_rounded, size: 18),
+                                        style: IconButton.styleFrom(backgroundColor: Colors.black54),
+                                      ),
+                                    )
+                                  ],
+                                ),
+                              ),
+                              
+                              Stack(
                                 children: [
                                   Container(
-                                    height: 160, width: double.infinity,
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(24),
-                                      gradient: LinearGradient(colors: [primaryColor, primaryColor.withValues(alpha: 0.6)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-                                      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, 4))],
-                                      image: _controller.localCoverBytes != null 
-                                          ? DecorationImage(image: MemoryImage(_controller.localCoverBytes!), fit: BoxFit.cover)
-                                          : (_controller.coverImageUrl.isNotEmpty ? DecorationImage(image: NetworkImage(_controller.coverImageUrl), fit: BoxFit.cover) : null)
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, shape: BoxShape.circle),
+                                    child: CircleAvatar(
+                                      radius: 56, backgroundColor: Colors.grey[300],
+                                      backgroundImage: _getAvatarImage(), // Nhận diện nullable ImageProvider sạch sẽ
+                                      child: (_controller.localAvatarBytes == null && _controller.avatarUrl.isEmpty) ? Icon(Icons.person_rounded, size: 60, color: Colors.grey[600]) : null, 
                                     ),
-                                    child: (_controller.localCoverBytes == null && _controller.coverImageUrl.isEmpty) ? const Icon(Icons.auto_awesome, color: Colors.white24, size: 80) : null,
                                   ),
                                   Positioned(
-                                    top: 16, right: 16,
-                                    child: IconButton.filled(
-                                      onPressed: () => _controller.pickAndCropCover(context, _currentUserId),
-                                      icon: const Icon(Icons.add_a_photo_rounded, size: 18),
-                                      style: IconButton.styleFrom(backgroundColor: Colors.black54),
+                                    bottom: 0, right: 0,
+                                    child: GestureDetector(
+                                      onTap: () => _controller.pickAndCropAvatar(context, _currentUserId),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(color: primaryColor, shape: BoxShape.circle, border: Border.all(color: Theme.of(context).colorScheme.surfaceContainerHighest, width: 3)),
+                                        child: const Icon(Icons.camera_alt_rounded, size: 16, color: Colors.white),
+                                      ),
                                     ),
                                   )
                                 ],
                               ),
-                            ),
-                            
-                            Stack(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(4),
-                                  decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, shape: BoxShape.circle),
-                                  child: CircleAvatar(
-                                    radius: 56, backgroundColor: Colors.grey[300],
-                                    backgroundImage: _getAvatarImage(),
-                                    child: (_controller.localAvatarBytes == null && _controller.avatarUrl.isEmpty) ? Icon(Icons.person_rounded, size: 60, color: Colors.grey[600]) : null, 
-                                  ),
-                                ),
-                                Positioned(
-                                  bottom: 0, right: 0,
-                                  child: GestureDetector(
-                                    onTap: () => _controller.pickAndCropAvatar(context, _currentUserId),
-                                    child: Container(
-                                      padding: const EdgeInsets.all(8),
-                                      decoration: BoxDecoration(color: primaryColor, shape: BoxShape.circle, border: Border.all(color: Theme.of(context).colorScheme.surfaceContainerHighest, width: 3)),
-                                      child: const Icon(Icons.camera_alt_rounded, size: 16, color: Colors.white),
-                                    ),
-                                  ),
-                                )
-                              ],
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -219,7 +256,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       const SizedBox(height: 32),
 
-                      // --- CÁC NỘI DUNG DƯỚI (ĐÃ BỎ ĐIỆN THOẠI) ---
+                      // --- CÁC NỘI DUNG DƯỚI ---
                       Container(
                         decoration: BoxDecoration(color: surfaceColor, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))]),
                         child: Column(
@@ -234,13 +271,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       const SizedBox(height: 24),
                     ],
-                  ),
-                ),
+                  );
+                }
               ),
             ),
           ),
-        );
-      }
+        ),
+      ),
     );
   }
 

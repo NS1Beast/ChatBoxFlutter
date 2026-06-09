@@ -6,6 +6,7 @@ import 'ContactsController.dart';
 import '../call/CallScreen.dart'; 
 
 class ContactsScreen extends StatefulWidget {
+  // 🎯 HÀM NÀY SẼ DÙNG ĐỂ GỌI NGƯỢC RA DASHBOARD
   final Function(String userId)? onStartChat; 
 
   const ContactsScreen({super.key, this.onStartChat});
@@ -247,7 +248,6 @@ class _ContactsScreenState extends State<ContactsScreen> {
               Text(friend['bio'] ?? 'Chưa có thông tin giới thiệu', style: TextStyle(color: primaryColor, fontSize: 15, fontStyle: FontStyle.italic)),
               const SizedBox(height: 32),
               
-              // 🎯 ĐÃ THÁO BỎ LỆNH IF (ISFRIEND) Ở ĐÂY ĐỂ LUÔN HIỆN NÚT NHẮN TIN / GỌI
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -256,10 +256,12 @@ class _ContactsScreenState extends State<ContactsScreen> {
                     label: 'Nhắn tin', 
                     primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor, 
                     onTap: () {
+                      // 🎯 ĐÃ FIX TRỊ DỨT ĐIỂM Ở ĐÂY: KHÔNG DÙNG NAVIGATOR.PUSH NỮA
                       if (widget.onStartChat != null) {
+                        // Gọi hàm này để báo cho DashboardScreen biết mà đổi Tab sang Chat
                         widget.onStartChat!(friend['id']);
                       } else {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Bắt đầu nhắn tin với ${friend['name']}')));
+                        debugPrint("LỖI: onStartChat chưa được truyền vào ContactsScreen từ DashboardScreen!");
                       }
                     }
                   ),
@@ -279,11 +281,8 @@ class _ContactsScreenState extends State<ContactsScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 24), // 🎯 Luôn hiện khoảng trống này
+              const SizedBox(height: 24), 
 
-              // ==========================================
-              // 🎯 NÚT KẾT BẠN / HỦY BẠN LỚN NHẤT
-              // ==========================================
               SizedBox(
                 width: double.infinity,
                 height: 56, 

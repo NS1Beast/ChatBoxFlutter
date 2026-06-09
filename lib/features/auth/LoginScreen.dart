@@ -3,6 +3,11 @@ import 'package:flutter/material.dart';
 import '../chat/screens/DashboardScreen.dart';
 import 'AuthController.dart'; 
 
+// 🎯 IMPORT THÊM CÁC CONTROLLER ĐỂ TẢI TRƯỚC DỮ LIỆU
+import '../settings/settings_controller.dart'; 
+import '../../core/theme/theme_controller.dart'; 
+import '../profile/ProfileController.dart';
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -12,6 +17,10 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final AuthController _controller = AuthController();
+
+  // 🎯 CÁC TRẠNG THÁI HIỂN THỊ LOADING
+  bool _isInitializing = true; // Chạy lúc mới mở App lên
+  bool _isPreparingData = false; // Chạy sau khi bấm Login thành công
 
   final _emailCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
@@ -26,6 +35,53 @@ class _LoginScreenState extends State<LoginScreen> {
   final _forgotOtpCtrl = TextEditingController();
   final _forgotPassCtrl = TextEditingController();
   final _forgotConfirmPassCtrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _checkAutoLogin();
+  }
+
+  // 🎯 KIỂM TRA TOKEN KHI MỚI VÀO APP
+  Future<void> _checkAutoLogin() async {
+    bool canAutoLogin = await _controller.tryAutoLogin();
+    if (canAutoLogin) {
+      await _prepareAndNavigate(); // Token còn sống, tải data rồi vào thẳng!
+    } else {
+      if (mounted) {
+        setState(() => _isInitializing = false); // Hết hạn, mở form đăng nhập
+      }
+    }
+  }
+
+  // 🎯 HÀM TẢI DATA SIÊU TỐC TRƯỚC KHI VÀO DASHBOARD
+  Future<void> _prepareAndNavigate() async {
+    if (mounted) setState(() => _isPreparingData = true);
+    
+    try {
+      String userId = await _controller.getCurrentUserId();
+      final settingsController = SettingsController();
+      
+      // Load tất cả cấu hình và Profile trước
+      await settingsController.loadSettingsForUser(userId);
+      themeController.changePrimaryColor(Color(settingsController.primaryColorValue));
+      themeController.toggleDarkMode(settingsController.isDarkMode);
+      await ProfileController().loadUserProfile(userId);
+
+      if (mounted) {
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const DashboardScreen()));
+      }
+    } catch (e) {
+      await _controller.logout();
+      if (mounted) {
+        setState(() {
+          _isInitializing = false;
+          _isPreparingData = false;
+        });
+        _showError('Phiên đăng nhập lỗi hoặc đã hết hạn. Vui lòng đăng nhập lại.');
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -45,11 +101,11 @@ class _LoginScreenState extends State<LoginScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message, style: const TextStyle(fontWeight: FontWeight.bold)), backgroundColor: Colors.green));
   }
 
-  // --- HÀM XỬ LÝ LOGIN ---
+  // --- HÀM XỬ LÝ LOGIN ĐƯỢC CHỈNH LẠI ---
   void _handleLogin() async {
     bool success = await _controller.login(_emailCtrl.text.trim(), _passCtrl.text);
     if (success && mounted) {
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const DashboardScreen()));
+      await _prepareAndNavigate(); // Chạy hàm tải Data thay vì vào Dashboard luôn
     } else if (mounted) {
        _showError('Đăng nhập thất bại. Kiểm tra lại Email/Mật khẩu!');
     }
@@ -58,13 +114,12 @@ class _LoginScreenState extends State<LoginScreen> {
   void _handleGoogleAuth() async {
     bool success = await _controller.loginWithGoogle();
     if (success && mounted) {
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const DashboardScreen()));
+      await _prepareAndNavigate(); // Chạy hàm tải Data thay vì vào Dashboard luôn
     } else if (mounted) {
       _showError('Đăng nhập Google thất bại hoặc đã bị hủy!');
     }
   }
 
-  // --- HÀM XỬ LÝ ĐĂNG KÝ ---
   void _submitRegStep1() async {
     String? err = await _controller.checkEmailAndSendOTP(_regEmailCtrl.text.trim());
     if (err != null) _showError(err);
@@ -91,7 +146,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // --- HÀM XỬ LÝ QUÊN MẬT KHẨU ---
   void _submitForgotStep1() async {
     String? err = await _controller.requestForgotPasswordOTP(_forgotEmailCtrl.text.trim());
     if (err != null) _showError(err);
@@ -116,7 +170,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // --- UI COMPONENTS ---
   Widget _buildTextField({required String label, required IconData icon, bool isPassword = false, bool? isPasswordVisible, VoidCallback? onVisibilityToggle, TextEditingController? controller, TextInputType? keyboardType}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 20), 
@@ -291,7 +344,6 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 32),
               Center(
                 child: TextButton(
-                  // 🎯 ĐÃ GỌI HÀM CỦA CONTROLLER CHUẨN XÁC, KHÔNG CÒN LỖI ĐỎ
                   onPressed: () => _controller.backRegisterStep(),
                   child: Text(_controller.registerStep > 1 ? '← Quay lại bước trước' : '← Quay lại Đăng nhập', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Theme.of(context).colorScheme.primary)),
                 ),
@@ -372,7 +424,6 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 32),
               Center(
                 child: TextButton(
-                  // 🎯 ĐÃ GỌI HÀM CỦA CONTROLLER CHUẨN XÁC, KHÔNG CÒN LỖI ĐỎ
                   onPressed: () => _controller.backForgotStep(),
                   child: Text(_controller.forgotStep > 1 ? '← Quay lại bước trước' : '← Quay lại Đăng nhập', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Theme.of(context).colorScheme.primary)),
                 ),
@@ -386,6 +437,25 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // 🎯 KIỂM TRA TRẠNG THÁI LOADING ĐỂ HIỂN THỊ MÀN HÌNH CHỜ XỊN XÒ
+    if (_isInitializing || _isPreparingData) {
+      return Scaffold(
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.forum_rounded, size: 100, color: Colors.white),
+              const SizedBox(height: 32),
+              const CircularProgressIndicator(color: Colors.white, strokeWidth: 3),
+              const SizedBox(height: 16),
+              Text('Đang đồng bộ dữ liệu...', style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 16, fontWeight: FontWeight.w500)),
+            ],
+          ),
+        ),
+      );
+    }
+
     final size = MediaQuery.of(context).size;
     final isDesktop = size.width > 800;
     const duration = Duration(milliseconds: 1200); 

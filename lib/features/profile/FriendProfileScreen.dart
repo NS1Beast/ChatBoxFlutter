@@ -2,7 +2,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-// ignore: depend_on_referenced_packages
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../contacts/ContactsController.dart';
@@ -15,10 +14,12 @@ class FriendProfileScreen extends StatefulWidget {
   final String coverImageUrl;
   final String bio;
   
-  // 🎯 SỬA THÀNH STRING 3 TRẠNG THÁI
   final String initialRelationStatus; 
   
   final ContactsController contactController;
+  
+  // 🎯 THÊM CÁI NÀY: Còi báo hiệu để chuyển Tab ở màn hình chính
+  final Function(String userId)? onStartChat;
 
   const FriendProfileScreen({
     super.key,
@@ -27,8 +28,9 @@ class FriendProfileScreen extends StatefulWidget {
     required this.avatarUrl,
     this.coverImageUrl = '',
     required this.bio,
-    this.initialRelationStatus = 'none', // Mặc định là none
+    this.initialRelationStatus = 'none', 
     required this.contactController,
+    this.onStartChat, // 🎯 Khai báo ở đây
   });
 
   @override
@@ -44,7 +46,6 @@ class _FriendProfileScreenState extends State<FriendProfileScreen> {
   @override
   void initState() {
     super.initState();
-    // 🎯 Hứng thẳng trạng thái từ Timeline truyền sang
     _relationStatus = widget.initialRelationStatus;
     _loadFriendLocalData(); 
   }
@@ -108,7 +109,7 @@ class _FriendProfileScreenState extends State<FriendProfileScreen> {
     return null;
   }
 
-  void _toggleFriendStatus() async {
+  void _toggleFriendStatusFromPanel() async {
     String newStatus = await widget.contactController.toggleFriendStatus(widget.userId);
 
     if (mounted) {
@@ -200,7 +201,6 @@ class _FriendProfileScreenState extends State<FriendProfileScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // --- ẢNH BÌA & AVATAR ---
                   SizedBox(
                     height: 220,
                     child: Stack(
@@ -234,17 +234,20 @@ class _FriendProfileScreenState extends State<FriendProfileScreen> {
                   Text(widget.bio, style: TextStyle(color: subtitleColor, fontSize: 16), textAlign: TextAlign.center),
                   const SizedBox(height: 24),
 
-                  // ==========================================
-                  // 🎯 ĐÃ THÁO BỌC IF(ISFRIEND) Ở ĐÂY
-                  // NÚT TƯƠNG TÁC NHANH (LUÔN LUÔN HIỆN)
-                  // ==========================================
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       _HoverableActionCard(
                         icon: Icons.chat_bubble_rounded, label: 'Nhắn tin',
                         primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor,
-                        onTap: () => Navigator.pop(context),
+                        onTap: () {
+                          // 🎯 ĐÃ SỬA CHỖ NÀY: Về lại màn hình trước và chuyển qua tab Chat
+                          Navigator.pop(context); // Đóng Profile trước
+                          
+                          if (widget.onStartChat != null) {
+                            widget.onStartChat!(widget.userId); // Gọi hàm chuyển màn hình
+                          }
+                        },
                       ),
                       const SizedBox(width: 16),
                       _HoverableActionCard(
@@ -260,11 +263,8 @@ class _FriendProfileScreenState extends State<FriendProfileScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24), // 🎯 Luôn giữ khoảng cách
+                  const SizedBox(height: 24), 
 
-                  // ==========================================
-                  // NÚT KẾT BẠN / HỦY BẠN LỚN NHẤT
-                  // ==========================================
                   SizedBox(
                     width: double.infinity,
                     height: 56, 
@@ -273,7 +273,7 @@ class _FriendProfileScreenState extends State<FriendProfileScreen> {
                       child: _relationStatus == 'friend'
                           ? OutlinedButton.icon(
                               key: const ValueKey('unfriend'),
-                              onPressed: _toggleFriendStatus,
+                              onPressed: _toggleFriendStatusFromPanel,
                               icon: const Icon(Icons.person_remove_rounded, size: 22),
                               label: const FittedBox(child: Text('Hủy kết bạn', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
                               style: OutlinedButton.styleFrom(
@@ -285,7 +285,7 @@ class _FriendProfileScreenState extends State<FriendProfileScreen> {
                           : _relationStatus == 'pending'
                             ? FilledButton.icon(
                                 key: const ValueKey('pending'),
-                                onPressed: _toggleFriendStatus,
+                                onPressed: _toggleFriendStatusFromPanel,
                                 icon: const Icon(Icons.access_time_rounded, size: 22),
                                 label: const FittedBox(child: Text('Đã gửi yêu cầu', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
                                 style: FilledButton.styleFrom(
@@ -297,7 +297,7 @@ class _FriendProfileScreenState extends State<FriendProfileScreen> {
                             : _relationStatus == 'awaiting'
                               ? FilledButton.icon(
                                   key: const ValueKey('awaiting'),
-                                  onPressed: _toggleFriendStatus,
+                                  onPressed: _toggleFriendStatusFromPanel,
                                   icon: const Icon(Icons.check_circle_outline_rounded, size: 22),
                                   label: const FittedBox(child: Text('Chấp nhận kết bạn', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
                                   style: FilledButton.styleFrom(
@@ -308,7 +308,7 @@ class _FriendProfileScreenState extends State<FriendProfileScreen> {
                                 )
                               : FilledButton.icon(
                                   key: const ValueKey('add_friend'),
-                                  onPressed: _toggleFriendStatus,
+                                  onPressed: _toggleFriendStatusFromPanel,
                                   icon: const Icon(Icons.person_add_rounded, size: 22),
                                   label: const FittedBox(child: Text('Thêm bạn bè', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
                                   style: FilledButton.styleFrom(
@@ -321,7 +321,6 @@ class _FriendProfileScreenState extends State<FriendProfileScreen> {
                   ),
                   const SizedBox(height: 32),
 
-                  // --- THÔNG TIN CHI TIẾT ---
                   _buildSectionHeader('Thông tin', textColor),
                   Container(
                     decoration: BoxDecoration(color: surfaceColor, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))]),
@@ -335,7 +334,6 @@ class _FriendProfileScreenState extends State<FriendProfileScreen> {
                   ),
                   const SizedBox(height: 32),
 
-                  // --- CÁC TÙY CHỌN KHÁC ---
                   _buildSectionHeader('Tùy chọn', textColor),
                   Container(
                     decoration: BoxDecoration(color: surfaceColor, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))]),

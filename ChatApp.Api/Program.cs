@@ -1,54 +1,102 @@
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.Google; // 🎯 BẮT BUỘC PHẢI CÓ DÒNG NÀY ĐỂ TRÁNH LỖI SCHEME 'Google'
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 using Microsoft.EntityFrameworkCore;
-using ChatApp.Api.Models;
+using ChatApp.Api.Models; 
+using ChatApp.Api.Services; 
+using ChatApp.Api.Hubs; 
 using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // ==========================================
-// 1. DATABASE POSTGRESQL (NÂNG CẤP HỖ TRỢ JSONB)
+// 1. DATABASE POSTGRESQL
 // ==========================================
 var connString = builder.Configuration.GetConnectionString("DefaultConnection");
 var dataSourceBuilder = new NpgsqlDataSourceBuilder(connString);
-
-// Bật tính năng convert tự động JSONB sang Object C#
 dataSourceBuilder.EnableDynamicJson(); 
 var dataSource = dataSourceBuilder.Build();
 
 builder.Services.AddDbContext<ChatDbContext>(options =>
     options.UseNpgsql(dataSource));
 
-// 2. CONTROLLERS
+// ==========================================
+// 2. CONTROLLERS & SERVICES
+// ==========================================
 builder.Services.AddControllers();
 builder.Services.AddMemoryCache();
-// 3. SIGNALR
-builder.Services.AddSignalR();
+builder.Services.AddSingleton<EncryptionService>();
 
-// 4. CORS CHO FLUTTER
+// ==========================================
+// 3. SIGNALR & CORS
+// ==========================================
+builder.Services.AddSignalR();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFlutterApp", policy =>
-        policy.AllowAnyOrigin()
+        policy.SetIsOriginAllowed(_ => true) 
             .AllowAnyMethod()
-            .AllowAnyHeader());
+            .AllowAnyHeader()
+            .AllowCredentials());
 });
 
-// 5. CẤU HÌNH ĐĂNG NHẬP GOOGLE
+// ==========================================
+// 4. 🎯 CẤU HÌNH AUTHENTICATION CHUẨN KÉP (TÁCH BẠCH RÕ RÀNG)
+// ==========================================
 builder.Services.AddAuthentication(options =>
 {
-    // Cookie dùng để giữ trạng thái tạm trong lúc redirect qua Google
-    options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+    // Mặc định API và SignalR check quyền bằng JWT
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    
+    // 🎯 CHÌA KHÓA Ở ĐÂY: Bắt buộc dùng Cookie để lưu trạng thái tạm khi SignIn Google
+    options.DefaultSignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
 })
-.AddCookie()
-.AddGoogle(options =>
+// Khai báo Scheme 1: JWT Bearer (Dùng cho SignalR và API)
+.AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = builder.Configuration["Jwt:Issuer"],
+        ValidAudience = builder.Configuration["Jwt:Audience"],
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
+    };
+
+    // Bắt token từ URL cho SignalR
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var accessToken = context.Request.Query["access_token"];
+            var path = context.HttpContext.Request.Path;
+            if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/chatHub"))
+            {
+                context.Token = accessToken;
+            }
+            return Task.CompletedTask;
+        }
+    };
+})
+// Khai báo Scheme 2: Cookie
+.AddCookie(CookieAuthenticationDefaults.AuthenticationScheme)
+// Khai báo Scheme 3: Google
+.AddGoogle(GoogleDefaults.AuthenticationScheme, options =>
 {
     options.ClientId = builder.Configuration["Authentication:Google:ClientId"]!;
     options.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"]!;
-
-    // Callback mặc định: /signin-google
+    // Ràng buộc Google phải xài Cookie để lưu state
+    options.SignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
 });
 
-// 6. SWAGGER
+// ==========================================
+// 5. SWAGGER
+// ==========================================
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -63,18 +111,12 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-// CORS đặt trước Authentication / Authorization
 app.UseCors("AllowFlutterApp");
 
-// Authentication phải đặt trước Authorization
 app.UseAuthentication();
-
 app.UseAuthorization();
 
-// Map Controllers
 app.MapControllers();
-
-// Sau này có ChatHub thì mở dòng này:
-// app.MapHub<ChatHub>("/chathub");
+app.MapHub<ChatHub>("/chatHub");
 
 app.Run();

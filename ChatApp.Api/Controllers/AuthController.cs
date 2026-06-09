@@ -11,6 +11,7 @@ using System.Net;
 using System.Net.Mail; 
 using BCrypt.Net; 
 using ChatApp.Api.Models;
+using Microsoft.AspNetCore.Authentication.Google;
 
 namespace ChatApp.Api.Controllers
 {
@@ -188,7 +189,7 @@ namespace ChatApp.Api.Controllers
         {
             string scheme = provider.ToLower() switch
             {
-                "google" => "Google",
+                "google" => GoogleDefaults.AuthenticationScheme,
                 _ => string.Empty
             };
 

@@ -1,18 +1,20 @@
-// Đường dẫn: lib/features/auth/AuthController.dart
+// ignore_file: file_names
 import 'dart:convert';
 import 'dart:async'; 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // 🎯 THÊM CÁI NÀY
+import 'package:shared_preferences/shared_preferences.dart'; 
 import 'OpenID.dart'; 
+
+// 🎯 ĐÃ THÊM IMPORT SIGNALR VÀO ĐÂY
+import '../../../core/services/signalr_service.dart'; 
 
 enum AuthFormType { login, register, forgotPassword }
 
 class AuthController extends ChangeNotifier {
   AuthFormType currentForm = AuthFormType.login;
   
-  // 🎯 TRẠNG THÁI LOADING CHUNG
   bool isLoading = false;
 
   bool isLoginPassVisible = false;
@@ -36,7 +38,41 @@ class AuthController extends ChangeNotifier {
   final String _baseUrl = 'http://localhost:5034/api/auth';
 
   // ==========================================
-  // HÀM QUẢN LÝ LOADING
+  // 🎯 HÀM KIỂM TRA TỰ ĐỘNG ĐĂNG NHẬP
+  // ==========================================
+  Future<bool> tryAutoLogin() async {
+    String? token = await _storage.read(key: 'jwt_token');
+    if (token == null || token.isEmpty) return false;
+
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) {
+        await logout();
+        return false;
+      }
+
+      // Kiểm tra thời hạn Token
+      String payloadStr = parts[1];
+      while (payloadStr.length % 4 != 0) { payloadStr += '='; }
+      final payload = utf8.decode(base64Url.decode(payloadStr));
+      final payloadMap = jsonDecode(payload);
+
+      if (payloadMap.containsKey('exp')) {
+        final exp = payloadMap['exp'] * 1000;
+        if (DateTime.now().millisecondsSinceEpoch > exp) {
+          await logout(); // Token hết hạn
+          return false;
+        }
+      }
+      return true; // Token hợp lệ, cho qua!
+    } catch (e) {
+      await logout();
+      return false;
+    }
+  }
+
+  // ==========================================
+  // HÀM QUẢN LÝ LOADING & ĐIỀU HƯỚNG
   // ==========================================
   void backRegisterStep() {
     if (registerStep > 1) {
@@ -60,9 +96,6 @@ class AuthController extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ==========================================
-  // ĐIỀU HƯỚNG VÀ HIỂN THỊ UI
-  // ==========================================
   void switchForm(AuthFormType type) {
     currentForm = type;
     if (type != AuthFormType.register) _resetRegisterFlow();
@@ -118,9 +151,6 @@ class AuthController extends ChangeNotifier {
     return null;
   }
 
-  // ==========================================
-  // 🎯 HÀM LƯU TÊN VÀO Ổ CỨNG TRÁNH LỖI "NGƯỜI DÙNG MỚI"
-  // ==========================================
   Future<void> _extractAndSaveUserInfoFromToken(String token) async {
     try {
       final parts = token.split('.');
@@ -256,10 +286,7 @@ class AuthController extends ChangeNotifier {
       if (response.statusCode == 200) {
         String token = jsonDecode(response.body)['token'];
         await _storage.write(key: 'jwt_token', value: token);
-        
-        // 🎯 LƯU THÔNG TIN LÚC LOGIN VÀO
         await _extractAndSaveUserInfoFromToken(token);
-        
         return true;
       } else { 
         debugPrint(jsonDecode(response.body)['message']);
@@ -275,10 +302,7 @@ class AuthController extends ChangeNotifier {
       _setLoading(false);
       if (jwtToken == null || jwtToken.isEmpty) return false;
       await _storage.write(key: 'jwt_token', value: jwtToken);
-      
-      // 🎯 LƯU THÔNG TIN LÚC LOGIN GOOGLE VÀO
       await _extractAndSaveUserInfoFromToken(jwtToken);
-      
       return true;
     } catch (e) { _setLoading(false); return false; }
   }
@@ -286,6 +310,13 @@ class AuthController extends ChangeNotifier {
   Future<void> logout() async {
     await _storage.delete(key: 'jwt_token');
     await _openIDService.signOut();
+    
+    // 🎯 RÚT PHÍCH CẮM SIGNALR TẠI ĐÂY ĐỂ TRÁNH BÓNG MA (TỰ GỬI TỰ TRẢ LỜI)
+    try {
+      await SignalRService().stopConnection();
+    } catch (e) {
+      debugPrint("Lỗi khi ngắt SignalR: $e");
+    }
   }
 
   Future<String> getCurrentUserId() async {

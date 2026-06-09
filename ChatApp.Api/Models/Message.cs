@@ -1,27 +1,46 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json;
 
-namespace ChatApp.Api.Models;
-
-public partial class Message
+namespace ChatApp.Api.Models
 {
-    public Guid Id { get; set; }
+    public class Message
+    {
+        [Key]
+        public Guid Id { get; set; } = Guid.NewGuid();
+        
+        public Guid ConversationId { get; set; }
+        
+        public Guid? SenderId { get; set; } // Nullable nếu user bị xóa
+        
+        // 🎯 CÁC CỘT ĐÃ ĐƯỢC CẬP NHẬT ĐỂ MÃ HÓA AES-GCM
+        public string Ciphertext { get; set; } = string.Empty;
+        
+        [MaxLength(100)]
+        public string Nonce { get; set; } = string.Empty;
+        
+        [MaxLength(100)]
+        public string Tag { get; set; } = string.Empty;
+        
+        [MaxLength(50)]
+        public string KeyId { get; set; } = "v1";
 
-    public Guid? Conversationid { get; set; }
+        [MaxLength(20)]
+        public string Type { get; set; } = "text";
+        
+        // Nếu dùng JSONB trong PostgreSQL, EF Core có thể map nó với JsonDocument hoặc string
+        [Column(TypeName = "jsonb")]
+        public JsonDocument? Metadata { get; set; }
+        
+        public bool IsDeleted { get; set; } = false;
+        
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
-    public Guid? Senderid { get; set; }
-
-    public string? Content { get; set; }
-
-    public string? Type { get; set; }
-
-    public string? Metadata { get; set; }
-
-    public bool? Isdeleted { get; set; }
-
-    public DateTime? Createdat { get; set; }
-
-    public virtual Conversation? Conversation { get; set; }
-
-    public virtual User? Sender { get; set; }
+        // Navigation properties
+        [ForeignKey("ConversationId")]
+        public Conversation? Conversation { get; set; }
+        
+        [ForeignKey("SenderId")]
+        public User? Sender { get; set; }
+    }
 }

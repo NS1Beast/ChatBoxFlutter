@@ -1,21 +1,23 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.ComponentModel.DataAnnotations;
 
-namespace ChatApp.Api.Models;
-
-public partial class Conversation
+namespace ChatApp.Api.Models
 {
-    public Guid Id { get; set; }
+    public class Conversation
+    {
+        [Key]
+        public Guid Id { get; set; } = Guid.NewGuid();
+        
+        public bool IsGroup { get; set; } = false;
+        
+        [MaxLength(100)]
+        public string? GroupName { get; set; }
+        
+        public string? GroupAvatarUrl { get; set; }
+        
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
-    public bool? Isgroup { get; set; }
-
-    public string? Groupname { get; set; }
-
-    public string? Groupavatarurl { get; set; }
-
-    public DateTime? Createdat { get; set; }
-
-    public virtual ICollection<Message> Messages { get; set; } = new List<Message>();
-
-    public virtual ICollection<Participant> Participants { get; set; } = new List<Participant>();
+        // Navigation properties (Tùy chọn)
+        public ICollection<Participant>? Participants { get; set; }
+        public ICollection<Message>? Messages { get; set; }
+    }
 }
