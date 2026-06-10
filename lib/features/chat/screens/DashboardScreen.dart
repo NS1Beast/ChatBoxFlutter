@@ -14,6 +14,10 @@ import '../../settings/settings_controller.dart';
 import '../../auth/AuthController.dart';
 import '../../profile/FriendProfileScreen.dart'; 
 import '../../contacts/ContactsController.dart';
+import '../../../core/services/signalr_service.dart';
+import '../../call/CallScreen.dart';
+
+final GlobalKey<NavigatorState> globalNavigatorKey = GlobalKey<NavigatorState>();
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -28,12 +32,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final ValueNotifier<Map<String, dynamic>?> _activeChatUser = ValueNotifier(null);
   
   final ContactsController _globalContactsController = ContactsController();
+  
+  final SignalRService _signalR = SignalRService();
 
   late final List<Widget> _pages;
 
   @override
   void initState() {
     super.initState();
+    _loadUserTheme();
+    
+    _signalR.startConnection().then((_) {
+      _signalR.webRTCSignal.addListener(_globalCallListener);
+    });
     
     _pages = [
       _buildChatTab(),
@@ -55,12 +66,48 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ];
   }
 
+  void _globalCallListener() {
+    final msg = _signalR.webRTCSignal.value;
+    if (msg == null) return;
+
+    final type = (msg['type'] ?? '').toString();
+    final content = (msg['content'] ?? '').toString();
+    final conversationId = (msg['conversationId'] ?? '').toString();
+
+    final callerName = (msg['callerName'] ?? 'Người gọi').toString();
+    String callerAvatar = (msg['callerAvatar'] ?? '').toString();
+    if (callerAvatar.isEmpty || callerAvatar == 'null') {
+      callerAvatar = "https://i.pravatar.cc/150"; // Avatar dự phòng
+    }
+
+    AuthController().getCurrentUserId().then((currentUserId) {
+      if (type == 'offer_video' || type == 'offer_voice') {
+        final isVideo = (type == 'offer_video');
+        
+        globalNavigatorKey.currentState?.push(MaterialPageRoute(
+          builder: (context) => CallScreen(
+            isVideoCall: isVideo,
+            userName: callerName, // Chèn Tên gọi
+            avatarUrl: callerAvatar, // Chèn Ảnh đại diện
+            conversationId: conversationId,
+            isCaller: false,
+            initialOfferPayload: content,
+            onCallEndedLog: (callType, logContent) {
+              _signalR.sendMessage(conversationId, logContent, callType);
+            },
+          ),
+        ));
+      }
+    });
+  }
+
   @override
   void dispose() {
     _selectedIndex.dispose();
     _searchedUser.dispose();
     _activeChatUser.dispose();
     _globalContactsController.dispose();
+    _signalR.webRTCSignal.removeListener(_globalCallListener);
     super.dispose();
   }
 
@@ -130,43 +177,50 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-      body: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          ValueListenableBuilder<int>(
-            valueListenable: _selectedIndex,
-            builder: (context, index, child) {
-              return ChatNavigationRail(
-                selectedIndex: index,
-                onDestinationSelected: (int newIndex) {
-                  if (_selectedIndex.value == newIndex) return;
-                  _selectedIndex.value = newIndex; 
-                },
-              );
-            }
-          ),
-          
-          Expanded(
-            child: ValueListenableBuilder<int>(
-              valueListenable: _selectedIndex,
-              builder: (context, index, child) {
-                return _SmoothIndexedStack(
-                  index: index,
-                  children: _pages, 
-                );
-              }
+    return Navigator(
+      key: globalNavigatorKey,
+      onGenerateRoute: (settings) {
+        return MaterialPageRoute(
+          builder: (context) => Scaffold(
+            backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+            body: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ValueListenableBuilder<int>(
+                  valueListenable: _selectedIndex,
+                  builder: (context, index, child) {
+                    return ChatNavigationRail(
+                      selectedIndex: index,
+                      onDestinationSelected: (int newIndex) {
+                        if (_selectedIndex.value == newIndex) return;
+                        _selectedIndex.value = newIndex; 
+                      },
+                    );
+                  }
+                ),
+                
+                Expanded(
+                  child: ValueListenableBuilder<int>(
+                    valueListenable: _selectedIndex,
+                    builder: (context, index, child) {
+                      return _SmoothIndexedStack(
+                        index: index,
+                        children: _pages, 
+                      );
+                    }
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
-      ),
+          )
+        );
+      },
     );
   }
 }
 
 // =========================================================================
-// 🎯 WIDGET TÙY CHỈNH: GIỮ TRANG CŨ FADE OUT, TRANG MỚI FADE/SLIDE IN (CHỐNG CRASH)
+// WIDGET TÙY CHỈNH: GIỮ TRANG CŨ FADE OUT, TRANG MỚI FADE/SLIDE IN
 // =========================================================================
 class _SmoothIndexedStack extends StatefulWidget {
   final int index;
@@ -192,7 +246,6 @@ class _SmoothIndexedStackState extends State<_SmoothIndexedStack> with SingleTic
   late int _currentIndex;
   bool _isAnimating = false;
 
-  // 🎯 VŨ KHÍ BÍ MẬT: CÁC HIỆU ỨNG TĨNH ĐỂ GIỮ NGUYÊN CẤU TRÚC WIDGET TREE
   static const _fullOpacity = AlwaysStoppedAnimation<double>(1.0);
   static const _zeroOpacity = AlwaysStoppedAnimation<double>(0.0);
   static const _zeroOffset = AlwaysStoppedAnimation<Offset>(Offset.zero);
@@ -258,7 +311,6 @@ class _SmoothIndexedStackState extends State<_SmoothIndexedStack> with SingleTic
         final bool isPrevious = index == _previousIndex;
         final bool isActive = isCurrent || isPrevious;
 
-        // 🎯 LỰA CHỌN ANIMATION TƯƠNG ỨNG MÀ KHÔNG LÀM THAY ĐỔI CẤU TRÚC CODE
         Animation<double> opacity;
         Animation<Offset> offset;
 
@@ -278,7 +330,6 @@ class _SmoothIndexedStackState extends State<_SmoothIndexedStack> with SingleTic
           offset = _zeroOffset;
         }
 
-        // 🎯 LUÔN LUÔN BỌC THEO ĐÚNG 1 TRÌNH TỰ ĐỂ FLUTTER KHÔNG HỦY STATE
         return Offstage(
           offstage: !isActive,
           child: IgnorePointer(

@@ -3,10 +3,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import 'ContactsController.dart';
-import '../call/CallScreen.dart'; 
+import '../chat/widgets/MainChatArea.dart'; // 🎯 IMPORT THÊM ĐỂ ĐIỀU HƯỚNG
 
 class ContactsScreen extends StatefulWidget {
-  // 🎯 HÀM NÀY SẼ DÙNG ĐỂ GỌI NGƯỢC RA DASHBOARD
   final Function(String userId)? onStartChat; 
 
   const ContactsScreen({super.key, this.onStartChat});
@@ -65,9 +64,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
           color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
           child: Row(
             children: [
-              // ==========================================
-              // CỘT TRÁI: DANH SÁCH BẠN BÈ / NHÓM
-              // ==========================================
+              // CỘT TRÁI
               Container(
                 width: 320,
                 decoration: BoxDecoration(
@@ -85,20 +82,13 @@ class _ContactsScreenState extends State<ContactsScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text('Danh bạ', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: textColor)),
-                              IconButton(
-                                icon: Icon(Icons.person_add_alt_1_rounded, color: primaryColor),
-                                onPressed: () {}, 
-                                tooltip: 'Thêm liên hệ',
-                              )
+                              IconButton(icon: Icon(Icons.person_add_alt_1_rounded, color: primaryColor), onPressed: () {}, tooltip: 'Thêm liên hệ')
                             ],
                           ),
                           const SizedBox(height: 16),
                           Container(
                             padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
+                            decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(12)),
                             child: Row(
                               children: [
                                 _buildTabButton('Bạn bè', 0, primaryColor, textColor),
@@ -124,7 +114,6 @@ class _ContactsScreenState extends State<ContactsScreen> {
                         ],
                       ),
                     ),
-
                     Expanded(
                       child: _controller.isLoading 
                       ? const Center(child: CircularProgressIndicator())
@@ -142,9 +131,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                 ),
               ),
 
-              // ==========================================
-              // CỘT PHẢI: CHI TIẾT LIÊN HỆ
-              // ==========================================
+              // CỘT PHẢI
               Expanded(
                 child: Container(
                   color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.1),
@@ -176,10 +163,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
               boxShadow: isSelected ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4)] : [],
             ),
             alignment: Alignment.center,
-            child: Text(
-              title,
-              style: TextStyle(fontWeight: FontWeight.bold, color: isSelected ? primaryColor : textColor.withValues(alpha: 0.6)),
-            ),
+            child: Text(title, style: TextStyle(fontWeight: FontWeight.bold, color: isSelected ? primaryColor : textColor.withValues(alpha: 0.6))),
           ),
         ),
       ),
@@ -256,28 +240,52 @@ class _ContactsScreenState extends State<ContactsScreen> {
                     label: 'Nhắn tin', 
                     primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor, 
                     onTap: () {
-                      // 🎯 ĐÃ FIX TRỊ DỨT ĐIỂM Ở ĐÂY: KHÔNG DÙNG NAVIGATOR.PUSH NỮA
-                      if (widget.onStartChat != null) {
-                        // Gọi hàm này để báo cho DashboardScreen biết mà đổi Tab sang Chat
-                        widget.onStartChat!(friend['id']);
-                      } else {
-                        debugPrint("LỖI: onStartChat chưa được truyền vào ContactsScreen từ DashboardScreen!");
-                      }
+                      if (widget.onStartChat != null) widget.onStartChat!(friend['id']);
                     }
                   ),
                   const SizedBox(width: 16),
+
+                  // 🎯 ĐÃ FIX: CHUYỂN HƯỚNG TỚI CHAT KÈM LỆNH GỌI THOẠI
                   _HoverableActionCard(
                     icon: Icons.call_rounded, 
                     label: 'Gọi thoại', 
                     primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor, 
-                    onTap: () => Navigator.push(context, PageRouteBuilder(opaque: false, pageBuilder: (context, animation, _) => CallScreen(isVideoCall: false, userName: friend['name'], avatarUrl: friend['avatarUrl'] ?? '')))
+                    onTap: () {
+                      if (widget.onStartChat != null) widget.onStartChat!(friend['id']);
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => MainChatArea(
+                            chatId: friend['id'],
+                            chatName: friend['name'] ?? '',
+                            chatAvatar: friend['avatarUrl'] ?? '',
+                            autoStartVoiceCall: true, // Ra lệnh gọi Voice
+                          ),
+                        ),
+                      );
+                    }
                   ),
                   const SizedBox(width: 16),
+
+                  // 🎯 ĐÃ FIX: CHUYỂN HƯỚNG TỚI CHAT KÈM LỆNH GỌI VIDEO
                   _HoverableActionCard(
                     icon: Icons.videocam_rounded, 
                     label: 'Gọi video', 
                     primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor, 
-                    onTap: () => Navigator.push(context, PageRouteBuilder(opaque: false, pageBuilder: (context, animation, _) => CallScreen(isVideoCall: true, userName: friend['name'], avatarUrl: friend['avatarUrl'] ?? '')))
+                    onTap: () {
+                      if (widget.onStartChat != null) widget.onStartChat!(friend['id']);
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => MainChatArea(
+                            chatId: friend['id'],
+                            chatName: friend['name'] ?? '',
+                            chatAvatar: friend['avatarUrl'] ?? '',
+                            autoStartVideoCall: true, // Ra lệnh gọi Video
+                          ),
+                        ),
+                      );
+                    }
                   ),
                 ],
               ),
@@ -291,57 +299,33 @@ class _ContactsScreenState extends State<ContactsScreen> {
                   child: relationStatus == 'friend'
                       ? OutlinedButton.icon(
                           key: const ValueKey('unfriend'),
-                          onPressed: () async {
-                            await _controller.toggleFriendStatusFromPanel();
-                          },
+                          onPressed: () async { await _controller.toggleFriendStatusFromPanel(); },
                           icon: const Icon(Icons.person_remove_rounded, size: 22),
                           label: const FittedBox(child: Text('Hủy kết bạn', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.redAccent, side: const BorderSide(color: Colors.redAccent),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), 
-                            minimumSize: const Size.fromHeight(56),
-                          ),
+                          style: OutlinedButton.styleFrom(foregroundColor: Colors.redAccent, side: const BorderSide(color: Colors.redAccent), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), minimumSize: const Size.fromHeight(56)),
                         )
                       : relationStatus == 'pending'
                         ? FilledButton.icon(
                             key: const ValueKey('pending'),
-                            onPressed: () async {
-                              await _controller.toggleFriendStatusFromPanel();
-                            },
+                            onPressed: () async { await _controller.toggleFriendStatusFromPanel(); },
                             icon: const Icon(Icons.access_time_rounded, size: 22),
                             label: const FittedBox(child: Text('Đã gửi yêu cầu', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
-                            style: FilledButton.styleFrom(
-                              backgroundColor: Colors.orange,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                              minimumSize: const Size.fromHeight(56),
-                            ),
+                            style: FilledButton.styleFrom(backgroundColor: Colors.orange, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), minimumSize: const Size.fromHeight(56)),
                           )
                         : relationStatus == 'awaiting'
                           ? FilledButton.icon(
                               key: const ValueKey('awaiting'),
-                              onPressed: () async {
-                                await _controller.toggleFriendStatusFromPanel();
-                              },
+                              onPressed: () async { await _controller.toggleFriendStatusFromPanel(); },
                               icon: const Icon(Icons.check_circle_outline_rounded, size: 22),
                               label: const FittedBox(child: Text('Chấp nhận lời mời', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
-                              style: FilledButton.styleFrom(
-                                backgroundColor: Colors.green,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                                minimumSize: const Size.fromHeight(56),
-                              ),
+                              style: FilledButton.styleFrom(backgroundColor: Colors.green, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), minimumSize: const Size.fromHeight(56)),
                             )
                           : FilledButton.icon(
                               key: const ValueKey('add_friend'),
-                              onPressed: () async {
-                                await _controller.toggleFriendStatusFromPanel();
-                              },
+                              onPressed: () async { await _controller.toggleFriendStatusFromPanel(); },
                               icon: const Icon(Icons.person_add_rounded, size: 22),
                               label: const FittedBox(child: Text('Thêm bạn bè', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
-                              style: FilledButton.styleFrom(
-                                backgroundColor: primaryColor,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                                minimumSize: const Size.fromHeight(56),
-                              ),
+                              style: FilledButton.styleFrom(backgroundColor: primaryColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), minimumSize: const Size.fromHeight(56)),
                             ),
                 ),
               ),
@@ -380,22 +364,12 @@ class _ContactsScreenState extends State<ContactsScreen> {
   }
 
   Widget _buildInfoSectionHeader(String title, Color textColor) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12, left: 8),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Text(title.toUpperCase(), style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: textColor.withValues(alpha: 0.5), letterSpacing: 1.2)),
-      ),
-    );
+    return Padding(padding: const EdgeInsets.only(bottom: 12, left: 8), child: Align(alignment: Alignment.centerLeft, child: Text(title.toUpperCase(), style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: textColor.withValues(alpha: 0.5), letterSpacing: 1.2))));
   }
 
   Widget _buildInfoTile(IconData icon, String title, String subtitle, Color textColor, Color primaryColor) {
     return ListTile(
-      leading: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(color: primaryColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-        child: Icon(icon, color: primaryColor, size: 20),
-      ),
+      leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: primaryColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)), child: Icon(icon, color: primaryColor, size: 20)),
       title: Text(title, style: TextStyle(fontSize: 13, color: textColor.withValues(alpha: 0.5))),
       subtitle: Text(subtitle, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: textColor)),
     );
@@ -403,11 +377,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
 
   Widget _buildActionTile(IconData icon, String title, Color color) {
     return ListTile(
-      leading: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-        child: Icon(icon, color: color, size: 20),
-      ),
+      leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)), child: Icon(icon, color: color, size: 20)),
       title: Text(title, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: color)),
       onTap: () {},
     );

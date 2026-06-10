@@ -1,9 +1,19 @@
+// ignore_file: file_names
 import 'package:flutter/material.dart';
-import '../models/chat_message.dart';
+import 'package:flutter/services.dart'; 
+import 'chat_message.dart'; // 🎯 Đã sửa lại đường dẫn import cho đúng thư mục hiện tại
 
 class HoverableMessageBubble extends StatefulWidget {
   final ChatMessage message;
-  const HoverableMessageBubble({super.key, required this.message});
+  final Function(ChatMessage)? onReply;
+  final Function(String)? onReact;
+
+  const HoverableMessageBubble({
+    super.key, 
+    required this.message,
+    this.onReply,
+    this.onReact,
+  });
 
   @override
   State<HoverableMessageBubble> createState() => _HoverableMessageBubbleState();
@@ -12,13 +22,12 @@ class HoverableMessageBubble extends StatefulWidget {
 class _HoverableMessageBubbleState extends State<HoverableMessageBubble> {
   bool _isHovered = false;
   Offset _tapPosition = Offset.zero;
-  
   bool _showDetails = false; 
 
+  final List<String> _quickEmojis = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+
   void _toggleDetails() {
-    setState(() {
-      _showDetails = !_showDetails;
-    });
+    setState(() => _showDetails = !_showDetails);
   }
 
   void _storePosition(TapDownDetails details) {
@@ -29,19 +38,49 @@ class _HoverableMessageBubbleState extends State<HoverableMessageBubble> {
     final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
     final textColor = Theme.of(context).colorScheme.onSurface;
 
-    await showMenu<String>(
+    final result = await showMenu<String>(
       context: context,
       position: RelativeRect.fromRect(_tapPosition & const Size(40, 40), Offset.zero & overlay.size),
       color: Theme.of(context).colorScheme.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       elevation: 8,
       items: <PopupMenuEntry<String>>[
+        PopupMenuItem<String>(
+          enabled: false, 
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: _quickEmojis.map((emoji) {
+              return GestureDetector(
+                onTap: () {
+                  Navigator.pop(context); 
+                  if (widget.onReact != null) widget.onReact!(emoji);
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                  child: Text(emoji, style: const TextStyle(fontSize: 24)),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+        const PopupMenuDivider(),
         PopupMenuItem<String>(value: 'reply', child: _buildMenuItem(Icons.reply_rounded, 'Trả lời', textColor)),
         PopupMenuItem<String>(value: 'copy', child: _buildMenuItem(Icons.copy_rounded, 'Sao chép', textColor)),
         const PopupMenuDivider(),
         PopupMenuItem<String>(value: 'delete', child: _buildMenuItem(Icons.delete_outline_rounded, 'Thu hồi', Colors.redAccent)),
       ],
     );
+
+    if (result == 'reply' && widget.onReply != null) {
+      widget.onReply!(widget.message);
+    } else if (result == 'copy') {
+      Clipboard.setData(ClipboardData(text: widget.message.text));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Đã sao chép tin nhắn'), duration: Duration(seconds: 1)),
+        );
+      }
+    }
   }
 
   Widget _buildMenuItem(IconData icon, String title, Color color) {
@@ -55,7 +94,6 @@ class _HoverableMessageBubbleState extends State<HoverableMessageBubble> {
     final surfaceColor = Theme.of(context).colorScheme.surface;
     final textColor = Theme.of(context).colorScheme.onSurface;
 
-    // Bo tròn góc tin nhắn
     final borderRadius = BorderRadius.only(
       topLeft: const Radius.circular(18), 
       topRight: const Radius.circular(18), 
@@ -68,6 +106,26 @@ class _HoverableMessageBubbleState extends State<HoverableMessageBubble> {
       child: Column(
         crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
+          
+          // 🎯 1. KHỐI HIỂN THỊ TIN NHẮN BỊ TRẢ LỜI (Nằm phía trên)
+          if (widget.message.replyToText != null)
+            Container(
+              margin: EdgeInsets.only(bottom: 4, left: isMe ? 40 : 12, right: isMe ? 12 : 40),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: isMe ? primaryColor.withValues(alpha: 0.15) : textColor.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(8),
+                border: Border(left: BorderSide(color: isMe ? primaryColor.withValues(alpha: 0.5) : textColor.withValues(alpha: 0.3), width: 3)),
+              ),
+              child: Text(
+                widget.message.replyToText!,
+                maxLines: 2, 
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 13, color: textColor.withValues(alpha: 0.7)),
+              ),
+            ),
+
+          // 🎯 2. KHỐI TIN NHẮN CHÍNH
           MouseRegion(
             onEnter: (_) => setState(() => _isHovered = true),
             onExit: (_) => setState(() => _isHovered = false),
@@ -85,7 +143,6 @@ class _HoverableMessageBubbleState extends State<HoverableMessageBubble> {
                       borderRadius: borderRadius,
                       boxShadow: widget.message.type == 'image' ? [] : [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
                     ),
-                    // 🎯 VŨ KHÍ: Dùng Material + InkWell để bắt Click chuẩn xác 100%
                     child: Material(
                       color: Colors.transparent,
                       child: InkWell(
@@ -93,15 +150,17 @@ class _HoverableMessageBubbleState extends State<HoverableMessageBubble> {
                         hoverColor: textColor.withValues(alpha: 0.05),
                         splashColor: textColor.withValues(alpha: 0.1),
                         highlightColor: textColor.withValues(alpha: 0.1),
-                        onTapDown: _storePosition, // Lấy vị trí để lỡ có nhấp chuột phải
-                        onSecondaryTapDown: _storePosition, // Chuột phải trên Windows
-                        onTap: _toggleDetails, // Click trái hiện thời gian
-                        onSecondaryTap: () => _showContextMenu(context), // Click phải hiện Menu
+                        onTapDown: _storePosition, 
+                        onSecondaryTapDown: _storePosition, 
+                        onTap: _toggleDetails, 
+                        onSecondaryTap: () => _showContextMenu(context), 
+                        onLongPress: () => _showContextMenu(context), 
                         child: Padding(
                           padding: widget.message.type == 'image' ? const EdgeInsets.all(4) : const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                           child: Column(
                             crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                             children: [
+                              // Text hoặc Ảnh
                               if (widget.message.type == 'image')
                                 ClipRRect(
                                   borderRadius: BorderRadius.circular(14), 
@@ -136,6 +195,33 @@ class _HoverableMessageBubbleState extends State<HoverableMessageBubble> {
                                     fontFamilyFallback: const ['Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji'],
                                   )
                                 ),
+                              
+                              // 🎯 3. KHỐI HIỂN THỊ CẢM XÚC (REACTIONS) DƯỚI ĐÍT TEXT
+                              if (widget.message.reactions.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8.0),
+                                  child: Wrap(
+                                    spacing: 6,
+                                    runSpacing: 4,
+                                    children: widget.message.reactions.entries.map((e) {
+                                      return Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: isMe ? Colors.black.withValues(alpha: 0.2) : textColor.withValues(alpha: 0.08),
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(e.key, style: const TextStyle(fontSize: 14)), 
+                                            const SizedBox(width: 4),
+                                            Text('${e.value}', style: TextStyle(fontSize: 12, color: isMe ? Colors.white : textColor, fontWeight: FontWeight.bold)), 
+                                          ],
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                )
                             ],
                           ),
                         ),
@@ -167,7 +253,6 @@ class _HoverableMessageBubbleState extends State<HoverableMessageBubble> {
   Widget _buildMessageStatusDetails(Color textColor, Color primaryColor) {
     bool isSending = widget.message.time == 'Đang gửi...';
     String displayTime = isSending ? 'Đang gửi' : widget.message.time; 
-
     IconData statusIcon = Icons.check_circle_outline_rounded; 
     Color iconColor = textColor.withValues(alpha: 0.5);
 
@@ -201,8 +286,10 @@ class _HoverableMessageBubbleState extends State<HoverableMessageBubble> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        IconButton(icon: Icon(Icons.reply_rounded, size: 20, color: textColor.withValues(alpha: 0.5)), onPressed: () {}, padding: const EdgeInsets.all(8)),
-        IconButton(icon: Icon(Icons.add_reaction_outlined, size: 20, color: textColor.withValues(alpha: 0.5)), onPressed: () {}, padding: const EdgeInsets.all(8)),
+        IconButton(icon: Icon(Icons.reply_rounded, size: 20, color: textColor.withValues(alpha: 0.5)), onPressed: () {
+          if (widget.onReply != null) widget.onReply!(widget.message);
+        }, padding: const EdgeInsets.all(8)),
+        IconButton(icon: Icon(Icons.add_reaction_outlined, size: 20, color: textColor.withValues(alpha: 0.5)), onPressed: () => _showContextMenu(context), padding: const EdgeInsets.all(8)),
       ],
     );
   }

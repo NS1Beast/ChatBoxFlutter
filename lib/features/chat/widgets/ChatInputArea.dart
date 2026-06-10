@@ -34,7 +34,7 @@ class _ChatInputAreaState extends State<ChatInputArea> {
   Timer? _timer;
 
   // --- BIẾN TRẠNG THÁI CHO GIPHY ---
-  final String _giphyApiKey = 'y9VvoFhrBbC8ddNzM6kx6S6ahYg2UsGo'; // Lát nữa ông tạo key thật thay vào đây
+  final String _giphyApiKey = 'y9VvoFhrBbC8ddNzM6kx6S6ahYg2UsGo'; 
   List<String> _gifUrls = [];
   bool _isLoadingGifs = false;
   Timer? _debounce;
