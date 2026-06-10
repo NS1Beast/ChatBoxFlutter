@@ -119,7 +119,8 @@ namespace ChatApp.Api.Controllers
                         senderId = m.SenderId,
                         content = decryptedContent,
                         type = m.Type,
-                        createdAt = m.CreatedAt
+                        // 🎯 ĐÃ SỬA: Chắc chắn có dòng này để Flutter nhận được giờ
+                        createdAt = m.CreatedAt 
                     };
                 });
 

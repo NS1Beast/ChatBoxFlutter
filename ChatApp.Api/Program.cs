@@ -26,13 +26,30 @@ builder.Services.AddDbContext<ChatDbContext>(options =>
 // 2. CONTROLLERS & SERVICES
 // ==========================================
 builder.Services.AddControllers();
-builder.Services.AddMemoryCache();
+builder.Services.AddMemoryCache(); // 🎯 CHIÊU 1: Đã bật RAM Cache
 builder.Services.AddSingleton<EncryptionService>();
+
+// 🎯 CHIÊU 2: ĐĂNG KÝ HÀNG ĐỢI BACKGROUND (Message Queue)
+builder.Services.AddSingleton<MessageQueue>(); 
+builder.Services.AddHostedService<MessageProcessorService>();
 
 // ==========================================
 // 3. SIGNALR & CORS
 // ==========================================
-builder.Services.AddSignalR();
+var signalRBuilder = builder.Services.AddSignalR();
+
+/* ==========================================
+   🎯 CHIÊU 3: REDIS BACKPLANE (Scale Out)
+   Để chạy được dòng này:
+   1. Cài NuGet: dotnet add package Microsoft.AspNetCore.SignalR.StackExchangeRedis
+   2. Cài phần mềm Redis Server (hoặc chạy Docker: docker run -p 6379:6379 redis)
+   
+   Nếu ông chỉ đang code trên 1 máy, hãy comment nó lại. Khi nào đem lên Server thật (AWS/Azure) thì mở ra!
+   ========================================== */
+// signalRBuilder.AddStackExchangeRedis("localhost:6379", options => {
+//     options.Configuration.ChannelPrefix = "ChatApp_Prod";
+// });
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFlutterApp", policy =>

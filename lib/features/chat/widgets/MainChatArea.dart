@@ -55,7 +55,6 @@ class _MainChatAreaState extends State<MainChatArea> {
     _signalR.incomingMessage.addListener(_onNewMessageReceived);
   }
 
-  // 🎯 ĐÃ FIX: Không gọi API lặp lại nếu chỉ đổi Avatar
   @override
   void didUpdateWidget(MainChatArea oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -79,7 +78,19 @@ class _MainChatAreaState extends State<MainChatArea> {
     _currentUserId = await AuthController().getCurrentUserId();
   }
 
-  // 🎯 ĐÃ FIX: Log rõ ràng, không clear message nếu lỗi API
+  // 🎯 VŨ KHÍ MỚI: Hàm format giờ tại chỗ (Tránh phải sửa file Model)
+  String _formatTime(dynamic createdAtStr) {
+    if (createdAtStr == null) return 'Đang gửi...';
+    try {
+      final localTime = DateTime.parse(createdAtStr.toString()).toLocal();
+      final hour = localTime.hour.toString().padLeft(2, '0');
+      final minute = localTime.minute.toString().padLeft(2, '0');
+      return '$hour:$minute';
+    } catch (e) {
+      return 'Vừa xong'; // Nếu lỡ parse lỗi thì backup
+    }
+  }
+
   Future<void> _initializeChat() async {
     if (_isInitializing) return;
     _isInitializing = true;
@@ -136,12 +147,15 @@ class _MainChatAreaState extends State<MainChatArea> {
         final loadedMessages = historyData.map((m) {
           final senderId = m['senderId']?.toString().toLowerCase() ?? '';
           final isMyMessage = senderId == _currentUserId.toLowerCase();
+          
+          final timeString = m['createdAt'] ?? m['CreatedAt'];
 
+          // 🎯 SỬ DỤNG MODEL CŨ: Truyền thẳng giờ đã format vào biến time
           return ChatMessage(
             text: m['content'] ?? '',
-            isMe: isMyMessage,
-            time: 'Đã gửi',
             type: m['type'] ?? 'text',
+            isMe: isMyMessage,
+            time: _formatTime(timeString), 
           );
         }).toList();
 
@@ -160,7 +174,6 @@ class _MainChatAreaState extends State<MainChatArea> {
     }
   }
 
-  // 🎯 ĐÃ FIX: Chống lỗi lệch chữ Hoa/Thường từ Backend C#
   void _onNewMessageReceived() {
     final msg = _signalR.incomingMessage.value;
     if (msg == null) return;
@@ -178,14 +191,21 @@ class _MainChatAreaState extends State<MainChatArea> {
         final senderId = (msg['senderId'] ?? msg['SenderId'])?.toString().toLowerCase();
         final content = (msg['content'] ?? msg['Content'] ?? '').toString();
         final type = (msg['type'] ?? msg['Type'] ?? 'text').toString();
-
         final isMyMessage = senderId == _currentUserId.toLowerCase();
 
+        final timeString = msg['createdAt'] ?? msg['CreatedAt'];
+
         if (isMyMessage) {
+          // Xóa tin nhắn tạm thời đang có chữ "Đang gửi..."
           messages.removeWhere((m) => m.time == 'Đang gửi...' && m.text == content);
         }
 
-        messages.add(ChatMessage(text: content, isMe: isMyMessage, time: 'Vừa xong', type: type));
+        messages.add(ChatMessage(
+          text: content, 
+          type: type,
+          isMe: isMyMessage, 
+          time: _formatTime(timeString),
+        ));
       });
     }
     _scrollToBottom();
@@ -198,7 +218,12 @@ class _MainChatAreaState extends State<MainChatArea> {
     }
 
     setState(() {
-      messages.add(ChatMessage(text: text, isMe: true, time: 'Đang gửi...', type: type));
+      messages.add(ChatMessage(
+        text: text, 
+        type: type,
+        isMe: true, 
+        time: 'Đang gửi...', // 🎯 Gắn cứng chữ này để UI hiện Icon Đang Gửi
+      ));
     });
     _scrollToBottom();
 
@@ -271,7 +296,14 @@ class _MainChatAreaState extends State<MainChatArea> {
                             controller: _scrollController,
                             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
                             itemCount: messages.length,
-                            itemBuilder: (context, index) => HoverableMessageBubble(message: messages[index]),
+                            itemBuilder: (context, index) {
+                              final message = messages[index];
+                              // 🎯 Fix key dựa trên text và thời gian để Render mượt
+                              return HoverableMessageBubble(
+                                key: ValueKey('${message.text}_${message.time}_$index'),
+                                message: message
+                              );
+                            },
                           ),
                         ),
                       ),
@@ -324,7 +356,7 @@ class _MainChatAreaState extends State<MainChatArea> {
     );
   }
 
-  Widget _buildRightInfoPanelWrapper(Color textColor, Color primaryColor, Color surfaceColor) {
+  Widget _buildRightInfoPanelWrapper(Color textColor, primaryColor, Color surfaceColor) {
     return Container(key: const ValueKey('panel'), width: 320, decoration: BoxDecoration(color: surfaceColor, border: Border(left: BorderSide(color: Colors.grey.withValues(alpha: 0.2)))), child: _buildRightInfoPanel(textColor, primaryColor));
   }
 

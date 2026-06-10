@@ -141,3 +141,7 @@ D:\IT\Code\Flutter\DoAnGiuaKy\chatapp\ChatApp.Api\obj\Debug\net10.0\refint\ChatA
 D:\IT\Code\Flutter\DoAnGiuaKy\chatapp\ChatApp.Api\obj\Debug\net10.0\ChatApp.Api.pdb
 D:\IT\Code\Flutter\DoAnGiuaKy\chatapp\ChatApp.Api\obj\Debug\net10.0\ChatApp.Api.genruntimeconfig.cache
 D:\IT\Code\Flutter\DoAnGiuaKy\chatapp\ChatApp.Api\obj\Debug\net10.0\ref\ChatApp.Api.dll
+D:\IT\Code\Flutter\DoAnGiuaKy\chatapp\ChatApp.Api\bin\Debug\net10.0\MessagePack.dll
+D:\IT\Code\Flutter\DoAnGiuaKy\chatapp\ChatApp.Api\bin\Debug\net10.0\MessagePack.Annotations.dll
+D:\IT\Code\Flutter\DoAnGiuaKy\chatapp\ChatApp.Api\bin\Debug\net10.0\Microsoft.AspNetCore.SignalR.StackExchangeRedis.dll
+D:\IT\Code\Flutter\DoAnGiuaKy\chatapp\ChatApp.Api\bin\Debug\net10.0\Microsoft.NET.StringTools.dll

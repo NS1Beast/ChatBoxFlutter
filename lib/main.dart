@@ -4,28 +4,38 @@ import 'package:desktop_webview_window/desktop_webview_window.dart';
 import 'package:chatapp/core/theme/AppTheme.dart';
 import 'package:chatapp/core/theme/theme_controller.dart';
 import 'package:chatapp/features/auth/LoginScreen.dart';
+import 'package:flutter/foundation.dart'; // 🎯 Thư viện bắt buộc để dùng kIsWeb
 
 void main(List<String> args) async {
-  if (runWebViewTitleBarWidget(args)) {
-    return;
-  }
   WidgetsFlutterBinding.ensureInitialized();
   
-  await windowManager.ensureInitialized();
+  // ==========================================
+  // 🎯 VŨ KHÍ TỐI THƯỢNG: NHỐT TẤT CẢ CODE DESKTOP VÀO ĐÂY
+  // ==========================================
+  if (!kIsWeb) {
+    // 1. Thằng này của desktop_webview_window (Chỉ chạy trên Desktop)
+    if (runWebViewTitleBarWidget(args)) {
+      return;
+    }
 
-  const WindowOptions windowOptions = WindowOptions(
-    size: Size(1100, 750),
-    minimumSize: Size(800, 600),
-    center: true,
-    backgroundColor: Colors.transparent,
-    skipTaskbar: false,
-  );
+    // 2. Thằng này của window_manager (Chỉ chạy trên Desktop)
+    await windowManager.ensureInitialized();
 
-  windowManager.waitUntilReadyToShow(windowOptions, () async {
-    await windowManager.show();
-    await windowManager.focus();
-  });
+    const WindowOptions windowOptions = WindowOptions(
+      size: Size(1100, 750),
+      minimumSize: Size(800, 600),
+      center: true,
+      backgroundColor: Colors.transparent,
+      skipTaskbar: false,
+    );
 
+    windowManager.waitUntilReadyToShow(windowOptions, () async {
+      await windowManager.show();
+      await windowManager.focus();
+    });
+  }
+
+  // Khởi chạy App bình thường (Cả Web lẫn Desktop đều đi qua dòng này)
   runApp(const ChatAppDesktop());
 }
 

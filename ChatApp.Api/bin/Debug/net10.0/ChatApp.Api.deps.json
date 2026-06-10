@@ -14,6 +14,7 @@
           "Microsoft.AspNetCore.Authentication.Google": "10.0.8",
           "Microsoft.AspNetCore.Authentication.JwtBearer": "10.0.8",
           "Microsoft.AspNetCore.OpenApi": "10.0.7",
+          "Microsoft.AspNetCore.SignalR.StackExchangeRedis": "10.0.9",
           "Microsoft.EntityFrameworkCore.Design": "10.0.8",
           "Npgsql.EntityFrameworkCore.PostgreSQL": "10.0.1",
           "StackExchange.Redis": "2.13.17",
@@ -70,6 +71,26 @@
           }
         }
       },
+      "MessagePack/2.5.301": {
+        "dependencies": {
+          "MessagePack.Annotations": "2.5.301",
+          "Microsoft.NET.StringTools": "17.6.3"
+        },
+        "runtime": {
+          "lib/net6.0/MessagePack.dll": {
+            "assemblyVersion": "2.5.0.0",
+            "fileVersion": "2.5.301.22103"
+          }
+        }
+      },
+      "MessagePack.Annotations/2.5.301": {
+        "runtime": {
+          "lib/netstandard2.0/MessagePack.Annotations.dll": {
+            "assemblyVersion": "2.5.0.0",
+            "fileVersion": "2.5.301.22103"
+          }
+        }
+      },
       "Microsoft.AspNetCore.Authentication.Facebook/10.0.8": {
         "runtime": {
           "lib/net10.0/Microsoft.AspNetCore.Authentication.Facebook.dll": {
@@ -105,6 +126,18 @@
           "lib/net10.0/Microsoft.AspNetCore.OpenApi.dll": {
             "assemblyVersion": "10.0.7.0",
             "fileVersion": "10.0.726.21808"
+          }
+        }
+      },
+      "Microsoft.AspNetCore.SignalR.StackExchangeRedis/10.0.9": {
+        "dependencies": {
+          "MessagePack": "2.5.301",
+          "StackExchange.Redis": "2.13.17"
+        },
+        "runtime": {
+          "lib/net10.0/Microsoft.AspNetCore.SignalR.StackExchangeRedis.dll": {
+            "assemblyVersion": "10.0.9.0",
+            "fileVersion": "10.0.926.27113"
           }
         }
       },
@@ -509,6 +542,14 @@
           }
         }
       },
+      "Microsoft.NET.StringTools/17.6.3": {
+        "runtime": {
+          "lib/net7.0/Microsoft.NET.StringTools.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "17.6.3.22601"
+          }
+        }
+      },
       "Microsoft.OpenApi/2.4.1": {
         "runtime": {
           "lib/net8.0/Microsoft.OpenApi.dll": {
@@ -753,6 +794,20 @@
       "path": "isopoh.cryptography.securearray/2.0.0",
       "hashPath": "isopoh.cryptography.securearray.2.0.0.nupkg.sha512"
     },
+    "MessagePack/2.5.301": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-WUnJgmYc06ngIxZxLe9sa0P6rOTyOZIQn8SuDvJSjyMn7e8/AdlNAdt81WPUhWKeQ7hDkgxKU1vTrJqX/4L79A==",
+      "path": "messagepack/2.5.301",
+      "hashPath": "messagepack.2.5.301.nupkg.sha512"
+    },
+    "MessagePack.Annotations/2.5.301": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-3PyBiSeKTfvtyzUv3+9eXGIw7vBBZ0GAc4k3+RVT0tz2vKv3l0pviiA2b6DrmHyDvj1Au8lSVDDw/wKPMxUQ4A==",
+      "path": "messagepack.annotations/2.5.301",
+      "hashPath": "messagepack.annotations.2.5.301.nupkg.sha512"
+    },
     "Microsoft.AspNetCore.Authentication.Facebook/10.0.8": {
       "type": "package",
       "serviceable": true,
@@ -780,6 +835,13 @@
       "sha512": "sha512-vKiAcGXG0BwNVw3bOjjWRLnp9tR18dR7MiwpvC94h0yFS+zfnzGHzS/JmmgwUdRixrGxrlIMRAWrVc+2DfAGlg==",
       "path": "microsoft.aspnetcore.openapi/10.0.7",
       "hashPath": "microsoft.aspnetcore.openapi.10.0.7.nupkg.sha512"
+    },
+    "Microsoft.AspNetCore.SignalR.StackExchangeRedis/10.0.9": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-/SYWdoRSmisGd2At8cJDA3/zfsw1A0eysPEROzgqNIfPPYfLzlb4Ta6wa6KIcNfRuVO5fFAkmICwLo14OVQ4Ag==",
+      "path": "microsoft.aspnetcore.signalr.stackexchangeredis/10.0.9",
+      "hashPath": "microsoft.aspnetcore.signalr.stackexchangeredis.10.0.9.nupkg.sha512"
     },
     "Microsoft.Build.Framework/18.0.2": {
       "type": "package",
@@ -899,6 +961,13 @@
       "sha512": "sha512-kDimB6Dkd3nkW2oZPDkMkVHfQt3IDqO5gL0oa8WVy3OP4uE8Ij+8TXnqg9TOd9ufjsY3IDiGz7pCUbnfL18tjg==",
       "path": "microsoft.identitymodel.tokens/8.0.1",
       "hashPath": "microsoft.identitymodel.tokens.8.0.1.nupkg.sha512"
+    },
+    "Microsoft.NET.StringTools/17.6.3": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-N0ZIanl1QCgvUumEL1laasU0a7sOE5ZwLZVTn0pAePnfhq8P7SvTjF8Axq+CnavuQkmdQpGNXQ1efZtu5kDFbA==",
+      "path": "microsoft.net.stringtools/17.6.3",
+      "hashPath": "microsoft.net.stringtools.17.6.3.nupkg.sha512"
     },
     "Microsoft.OpenApi/2.4.1": {
       "type": "package",

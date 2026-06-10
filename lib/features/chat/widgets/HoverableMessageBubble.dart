@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../models/chat_message.dart';
-import 'FullScreenImageViewer.dart'; // Tuỳ chỉnh đường dẫn nếu cần
 
 class HoverableMessageBubble extends StatefulWidget {
   final ChatMessage message;
@@ -13,6 +12,18 @@ class HoverableMessageBubble extends StatefulWidget {
 class _HoverableMessageBubbleState extends State<HoverableMessageBubble> {
   bool _isHovered = false;
   Offset _tapPosition = Offset.zero;
+  
+  bool _showDetails = false; 
+
+  void _toggleDetails() {
+    setState(() {
+      _showDetails = !_showDetails;
+    });
+  }
+
+  void _storePosition(TapDownDetails details) {
+    _tapPosition = details.globalPosition;
+  }
 
   void _showContextMenu(BuildContext context) async {
     final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
@@ -44,61 +55,145 @@ class _HoverableMessageBubbleState extends State<HoverableMessageBubble> {
     final surfaceColor = Theme.of(context).colorScheme.surface;
     final textColor = Theme.of(context).colorScheme.onSurface;
 
+    // Bo tròn góc tin nhắn
+    final borderRadius = BorderRadius.only(
+      topLeft: const Radius.circular(18), 
+      topRight: const Radius.circular(18), 
+      bottomLeft: Radius.circular(isMe ? 18 : 4), 
+      bottomRight: Radius.circular(isMe ? 4 : 18)
+    );
+
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: MouseRegion(
-        onEnter: (_) => setState(() => _isHovered = true),
-        onExit: (_) => setState(() => _isHovered = false),
-        child: Row(
-          mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            if (isMe && _isHovered) _buildActionIcons(textColor),
-            Flexible(
-              child: GestureDetector(
-                onSecondaryTapDown: (details) => _tapPosition = details.globalPosition,
-                onSecondaryTap: () => _showContextMenu(context),
-                onLongPressStart: (details) => _tapPosition = details.globalPosition,
-                onLongPress: () => _showContextMenu(context),
-                child: Container(
-                  margin: EdgeInsets.only(left: isMe ? 8 : 0, right: isMe ? 0 : 8),
-                  padding: widget.message.type == 'image' ? const EdgeInsets.all(4) : const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  constraints: const BoxConstraints(maxWidth: 400),
-                  decoration: BoxDecoration(
-                    color: isMe ? primaryColor : surfaceColor,
-                    borderRadius: BorderRadius.only(topLeft: const Radius.circular(18), topRight: const Radius.circular(18), bottomLeft: Radius.circular(isMe ? 18 : 4), bottomRight: Radius.circular(isMe ? 4 : 18)),
-                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                    children: [
-                      if (widget.message.type == 'image')
-                        MouseRegion(
-                          cursor: SystemMouseCursors.click,
-                          child: GestureDetector(
-                            onTap: () => Navigator.push(context, PageRouteBuilder(opaque: false, pageBuilder: (context, animation, _) => FadeTransition(opacity: animation, child: FullScreenImageViewer(imageUrl: widget.message.text, heroTag: 'image_${widget.message.text}_${widget.message.time}')))),
-                            child: Hero(tag: 'image_${widget.message.text}_${widget.message.time}', child: ClipRRect(borderRadius: BorderRadius.circular(14), child: Image.network(widget.message.text, fit: BoxFit.cover))),
+      padding: const EdgeInsets.only(bottom: 8), 
+      child: Column(
+        crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        children: [
+          MouseRegion(
+            onEnter: (_) => setState(() => _isHovered = true),
+            onExit: (_) => setState(() => _isHovered = false),
+            child: Row(
+              mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (isMe && _isHovered) _buildActionIcons(textColor),
+                Flexible(
+                  child: Container(
+                    margin: EdgeInsets.only(left: isMe ? 8 : 0, right: isMe ? 0 : 8),
+                    constraints: const BoxConstraints(maxWidth: 400),
+                    decoration: BoxDecoration(
+                      color: widget.message.type == 'image' ? Colors.transparent : (isMe ? primaryColor : surfaceColor),
+                      borderRadius: borderRadius,
+                      boxShadow: widget.message.type == 'image' ? [] : [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
+                    ),
+                    // 🎯 VŨ KHÍ: Dùng Material + InkWell để bắt Click chuẩn xác 100%
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: borderRadius,
+                        hoverColor: textColor.withValues(alpha: 0.05),
+                        splashColor: textColor.withValues(alpha: 0.1),
+                        highlightColor: textColor.withValues(alpha: 0.1),
+                        onTapDown: _storePosition, // Lấy vị trí để lỡ có nhấp chuột phải
+                        onSecondaryTapDown: _storePosition, // Chuột phải trên Windows
+                        onTap: _toggleDetails, // Click trái hiện thời gian
+                        onSecondaryTap: () => _showContextMenu(context), // Click phải hiện Menu
+                        child: Padding(
+                          padding: widget.message.type == 'image' ? const EdgeInsets.all(4) : const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          child: Column(
+                            crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                            children: [
+                              if (widget.message.type == 'image')
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(14), 
+                                  child: Image.network(
+                                    widget.message.text, 
+                                    fit: BoxFit.cover,
+                                    loadingBuilder: (context, child, loadingProgress) {
+                                      if (loadingProgress == null) return child;
+                                      return Container(
+                                        height: 200, width: 250,
+                                        decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.1)),
+                                        child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                                      );
+                                    },
+                                    errorBuilder: (context, error, stackTrace) => Container(
+                                      height: 150, width: 200,
+                                      decoration: BoxDecoration(color: Colors.redAccent.withValues(alpha: 0.1)),
+                                      child: const Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [Icon(Icons.broken_image_rounded, color: Colors.redAccent), SizedBox(height: 8), Text('Lỗi ảnh', style: TextStyle(color: Colors.redAccent))],
+                                      ),
+                                    ),
+                                  )
+                                )
+                              else
+                                Text(
+                                  widget.message.text, 
+                                  style: TextStyle(
+                                    color: isMe ? Colors.white : textColor, 
+                                    fontSize: 15, 
+                                    height: 1.4,
+                                    fontFamilyFallback: const ['Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji'],
+                                  )
+                                ),
+                            ],
                           ),
-                        )
-                      else
-                        Text(widget.message.text, style: TextStyle(color: isMe ? Colors.white : textColor, fontSize: 15, height: 1.4)),
-                      const SizedBox(height: 4),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(widget.message.time, style: TextStyle(color: isMe ? Colors.white70 : textColor.withValues(alpha: 0.5), fontSize: 11)),
-                          if (isMe) ...[const SizedBox(width: 4), const Icon(Icons.done_all_rounded, size: 14, color: Colors.white70)]
-                        ],
+                        ),
                       ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
+                if (!isMe && _isHovered) _buildActionIcons(textColor),
+              ],
             ),
-            if (!isMe && _isHovered) _buildActionIcons(textColor),
-          ],
-        ),
+          ),
+          
+          AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
+            alignment: isMe ? Alignment.topRight : Alignment.topLeft, 
+            child: _showDetails 
+              ? Padding(
+                  padding: EdgeInsets.only(top: 4, left: isMe ? 0 : 8, right: isMe ? 8 : 0, bottom: 4),
+                  child: _buildMessageStatusDetails(textColor, primaryColor),
+                ) 
+              : const SizedBox.shrink(),
+          ),
+        ],
       ),
+    );
+  }
+
+  Widget _buildMessageStatusDetails(Color textColor, Color primaryColor) {
+    bool isSending = widget.message.time == 'Đang gửi...';
+    String displayTime = isSending ? 'Đang gửi' : widget.message.time; 
+
+    IconData statusIcon = Icons.check_circle_outline_rounded; 
+    Color iconColor = textColor.withValues(alpha: 0.5);
+
+    if (isSending) {
+      statusIcon = Icons.radio_button_unchecked_rounded; 
+    } else {
+      statusIcon = Icons.check_circle_rounded; 
+      iconColor = primaryColor; 
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (!widget.message.isMe) ...[
+          Text(displayTime, style: TextStyle(fontSize: 12, color: textColor.withValues(alpha: 0.5), fontWeight: FontWeight.w500)),
+        ] 
+        else ...[
+          Text(displayTime, style: TextStyle(fontSize: 12, color: textColor.withValues(alpha: 0.5), fontWeight: FontWeight.w500)),
+          const SizedBox(width: 4),
+          const Text('•', style: TextStyle(fontSize: 12, color: Colors.grey)),
+          const SizedBox(width: 4),
+          Icon(statusIcon, size: 14, color: iconColor),
+          const SizedBox(width: 4),
+          Text(isSending ? 'Đang gửi' : 'Đã gửi', style: TextStyle(fontSize: 12, color: textColor.withValues(alpha: 0.5))),
+        ],
+      ],
     );
   }
 
