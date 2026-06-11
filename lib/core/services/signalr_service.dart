@@ -1,5 +1,7 @@
 // ignore_file: file_names
 
+import 'dart:async';
+
 import 'package:signalr_netcore/signalr_client.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter/foundation.dart';
@@ -19,7 +21,11 @@ class SignalRService {
       ValueNotifier<Map<String, dynamic>?>(null);
 
   final Set<String> _joinedConversations = <String>{};
-  bool _isStarting = false;
+
+  Future<void>? _startFuture;
+
+  // Queue riêng cho WebRTC signal để không spam HubConnection.invoke song song.
+  Future<void> _callSignalQueue = Future<void>.value();
 
   static const String baseUrl = 'http://localhost:5034';
 
@@ -28,16 +34,37 @@ class SignalRService {
 
   Future<void> startConnection() async {
     if (_hubConnection?.state == HubConnectionState.Connected) return;
-    if (_hubConnection?.state == HubConnectionState.Connecting) return;
-    if (_isStarting) return;
 
-    _isStarting = true;
+    if (_startFuture != null) {
+      await _startFuture;
+      return;
+    }
+
+    _startFuture = _startConnectionInternal();
 
     try {
+      await _startFuture;
+    } finally {
+      _startFuture = null;
+    }
+  }
+
+  Future<void> _startConnectionInternal() async {
+    try {
       final token = await _storage.read(key: 'jwt_token');
+
       if (token == null || token.isEmpty) {
         debugPrint('❌ SignalR không có jwt_token.');
         return;
+      }
+
+      final oldConnection = _hubConnection;
+
+      if (oldConnection != null &&
+          oldConnection.state != HubConnectionState.Disconnected) {
+        try {
+          await oldConnection.stop();
+        } catch (_) {}
       }
 
       _hubConnection = HubConnectionBuilder()
@@ -73,8 +100,6 @@ class SignalRService {
       await _rejoinAllConversations();
     } catch (e) {
       debugPrint('❌ SignalR LỖI KẾT NỐI: $e');
-    } finally {
-      _isStarting = false;
     }
   }
 
@@ -97,7 +122,7 @@ class SignalRService {
     String conversationId,
     String content,
     String type, {
-    String? metadata, 
+    String? metadata,
   }) async {
     final normalizedConversationId = _normalizeConversationId(conversationId);
 
@@ -112,14 +137,12 @@ class SignalRService {
     await joinConversation(normalizedConversationId);
 
     try {
-      // 🎯 ĐÃ FIX: Xử lý mảng args động để tránh lỗi String? không ném được vào List<Object>
-      List<Object> args = [normalizedConversationId, content, type];
-      if (metadata != null) {
-        args.add(metadata);
-      } else {
-        // Nếu không có metadata thì quăng một chuỗi rỗng lên cho Backend nó tự xử
-        args.add(""); 
-      }
+      final List<Object> args = [
+        normalizedConversationId,
+        content,
+        type,
+        metadata ?? '',
+      ];
 
       await _hubConnection?.invoke(
         'SendMessage',
@@ -138,17 +161,44 @@ class SignalRService {
   ) async {
     final normalizedConversationId = _normalizeConversationId(conversationId);
 
+    // ICE bắn rất nhanh, bắt buộc queue tuần tự.
+    // Offer/answer/end cũng cho đi qua cùng queue để giữ đúng thứ tự.
+    _callSignalQueue = _callSignalQueue
+        .catchError((_) {})
+        .then((_) => _sendCallSignalNow(
+              normalizedConversationId,
+              type,
+              content,
+            ));
+
+    return _callSignalQueue;
+  }
+
+  Future<void> _sendCallSignalNow(
+    String normalizedConversationId,
+    String type,
+    String content,
+  ) async {
     try {
       if (!isConnected) {
         await startConnection();
       }
 
       if (!isConnected) {
-        debugPrint('❌ SignalR chưa kết nối, không thể gửi WebRTC signal [$type]');
+        debugPrint('❌ SignalR chưa kết nối, bỏ WebRTC signal [$type]');
         return;
       }
 
-      await joinConversation(normalizedConversationId);
+      // Không join lại liên tục cho từng ICE.
+      // Chỉ join nếu conversation chưa có trong cache.
+      if (!_joinedConversations.contains(normalizedConversationId)) {
+        await joinConversation(normalizedConversationId);
+      }
+
+      if (!isConnected) {
+        debugPrint('❌ SignalR mất kết nối trước khi gửi WebRTC signal [$type]');
+        return;
+      }
 
       await _hubConnection?.invoke(
         'SendWebRTCSignal',
@@ -241,8 +291,11 @@ class SignalRService {
     final type = args[1]?.toString() ?? '';
     final content = args[2]?.toString() ?? '';
 
-    final callerName = (args.length > 3 && args[3] != null) ? args[3].toString() : 'Người gọi';
-    final callerAvatar = (args.length > 4 && args[4] != null) ? args[4].toString() : '';
+    final callerName =
+        (args.length > 3 && args[3] != null) ? args[3].toString() : 'Người gọi';
+
+    final callerAvatar =
+        (args.length > 4 && args[4] != null) ? args[4].toString() : '';
 
     if (conversationId.isEmpty || type.isEmpty) {
       debugPrint('❌ WebRTC signal thiếu conversationId/type: $args');
@@ -253,8 +306,8 @@ class SignalRService {
       'conversationId': _normalizeConversationId(conversationId),
       'type': type,
       'content': content,
-      'callerName': callerName,     
-      'callerAvatar': callerAvatar, 
+      'callerName': callerName,
+      'callerAvatar': callerAvatar,
       'timestamp': DateTime.now().millisecondsSinceEpoch,
     };
 

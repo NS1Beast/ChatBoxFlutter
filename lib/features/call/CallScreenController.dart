@@ -36,7 +36,7 @@ class CallScreenController {
   bool _hasHandledAnswer = false;
 
   final List<RTCIceCandidate> _pendingIceCandidates = [];
-
+  final Set<String> _sentIceCandidateTexts = <String>{};
   bool get isClosed => _isDisposed || _isEnding;
 
   CallScreenController({
@@ -212,22 +212,26 @@ class CallScreenController {
     };
 
     pc.onIceCandidate = (candidate) {
-      if (_isDisposed || _isEnding) return;
+  if (_isDisposed || _isEnding) return;
 
-      final candidateMap = candidate.toMap();
-      final candidateText = candidateMap['candidate']?.toString();
+  final candidateMap = candidate.toMap();
+  final candidateText = candidateMap['candidate']?.toString();
 
-      if (candidateText == null || candidateText.isEmpty) return;
+  if (candidateText == null || candidateText.isEmpty) return;
 
-      unawaited(
-        signalR
-            .sendCallSignal(conversationId, 'ice', jsonEncode(candidateMap))
-            .timeout(const Duration(seconds: 2))
-            .catchError((e) {
-          debugPrint('⚠️ Gửi ICE candidate lỗi/timeout: $e');
-        }),
-      );
-    };
+  // Chống gửi trùng candidate.
+  if (!_sentIceCandidateTexts.add(candidateText)) return;
+
+  // Tuyệt đối không timeout ICE ở đây.
+  // SignalRService sẽ tự queue tuần tự để tránh nghẽn connection.
+  unawaited(
+    signalR.sendCallSignal(
+      conversationId,
+      'ice',
+      jsonEncode(candidateMap),
+    ),
+  );
+};
 
     debugPrint('✅ PeerConnection đã tạo xong');
   }
@@ -256,9 +260,11 @@ class CallScreenController {
 
       final offerType = isVideoCall ? 'offer_video' : 'offer_voice';
 
-      await signalR
-          .sendCallSignal(conversationId, offerType, jsonEncode(offer.toMap()))
-          .timeout(const Duration(seconds: 4));
+      await signalR.sendCallSignal(
+        conversationId,
+        offerType,
+        jsonEncode(offer.toMap()),
+      );
 
       debugPrint('📤 Đã gửi $offerType');
     } catch (e) {
@@ -307,13 +313,11 @@ class CallScreenController {
 
         if (_isDisposed || _isEnding) return;
 
-        await signalR
-            .sendCallSignal(
-              conversationId,
-              'answer',
-              jsonEncode(answer.toMap()),
-            )
-            .timeout(const Duration(seconds: 4));
+        await signalR.sendCallSignal(
+          conversationId,
+          'answer',
+          jsonEncode(answer.toMap()),
+        );
 
         debugPrint('📤 Đã gửi answer');
       } else if (type == 'answer') {
@@ -358,6 +362,7 @@ class CallScreenController {
 
     final candidates = List<RTCIceCandidate>.from(_pendingIceCandidates);
     _pendingIceCandidates.clear();
+    _sentIceCandidateTexts.clear();
 
     for (final candidate in candidates) {
       if (_isDisposed || _isEnding) return;
