@@ -4,6 +4,8 @@ using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using ChatApp.Api.Models; 
 using ChatApp.Api.Services; 
+using System.Text.Json;
+using System.Text.Json.Nodes; 
 
 namespace ChatApp.Api.Controllers 
 {
@@ -27,7 +29,7 @@ namespace ChatApp.Api.Controllers
         }
 
         // ==========================================
-        // 1. LẤY HOẶC TẠO CHAT 1-1 (Giữ nguyên)
+        // 1. LẤY HOẶC TẠO CHAT 1-1
         // ==========================================
         [HttpPost("get-or-create")]
         public async Task<IActionResult> GetOrCreateConversation([FromBody] CreateConversationRequest request)
@@ -77,7 +79,7 @@ namespace ChatApp.Api.Controllers
         }
 
         // ==========================================
-        // 2. LẤY LỊCH SỬ TIN NHẮN ĐỂ SYNC (Giữ nguyên)
+        // 2. LẤY LỊCH SỬ TIN NHẮN ĐỂ SYNC
         // ==========================================
         [HttpGet("{conversationId}/messages")] 
         public async Task<IActionResult> GetMessages(Guid conversationId, [FromQuery] string? since)
@@ -93,40 +95,40 @@ namespace ChatApp.Api.Controllers
 
                 if (!isMember)
                 {
-                    return StatusCode(403, new { 
-                        message = "User hiện tại không thuộc conversation này.", 
-                        conversationId, currentUserId 
-                    });
+                    return StatusCode(403, new { message = "User hiện tại không thuộc conversation này." });
                 }
 
-                // 1. Dựng khung Query cơ bản
                 var query = _db.Messages
                     .AsNoTracking()
                     .Where(m => m.ConversationId == conversationId && !m.IsDeleted);
 
-                // 2. 🎯 CƠ CHẾ SYNC: Lọc những tin nhắn MỚI HƠN thời gian Flutter gửi lên
                 if (!string.IsNullOrWhiteSpace(since) && DateTime.TryParse(since, out DateTime sinceDate))
                 {
                     var utcSinceDate = sinceDate.ToUniversalTime();
                     query = query.Where(m => m.CreatedAt > utcSinceDate);
                 }
 
-                // 3. Thực thi lấy dữ liệu từ DB
-                var messagesList = await query
-                    .OrderBy(m => m.CreatedAt)
-                    .ToListAsync();
+                var rawMessagesList = await query.OrderBy(m => m.CreatedAt).ToListAsync();
 
-                // 4. Giải mã và đóng gói trả về JSON
+                // 🎯 SỬA LỖI CS8121: Trích xuất JsonDocument cực chuẩn
+                var messagesList = rawMessagesList.Where(m => {
+                    if (m.Metadata == null) return true;
+                    
+                    string metaStr = m.Metadata.RootElement.GetRawText();
+                    if (string.IsNullOrWhiteSpace(metaStr)) return true;
+                    
+                    return !metaStr.Contains(currentUserId.ToString(), StringComparison.OrdinalIgnoreCase);
+                }).ToList();
+
                 var result = messagesList.Select(m =>
                 {
-                    string decryptedContent = "[Tin nhắn bị lỗi hoặc định dạng cũ]";
-                    try
-                    {
-                        decryptedContent = _crypto.Decrypt(m.Ciphertext, m.Nonce, m.Tag);
-                    }
-                    catch (Exception ex)
-                    {
-                        decryptedContent = $"[Không giải mã được tin nhắn: {ex.Message}]";
+                    string decryptedContent = "[Tin nhắn bị lỗi]";
+                    
+                    if (m.Type == "revoked") {
+                        decryptedContent = "Tin nhắn đã được thu hồi";
+                    } else {
+                        try { decryptedContent = _crypto.Decrypt(m.Ciphertext, m.Nonce, m.Tag); }
+                        catch { decryptedContent = "[Không thể giải mã tin nhắn]"; }
                     }
 
                     return new
@@ -135,7 +137,7 @@ namespace ChatApp.Api.Controllers
                         senderId = m.SenderId,
                         content = decryptedContent,
                         type = m.Type,
-                        metadata = m.Metadata, // 🎯 QUAN TRỌNG: Trả về cục Metadata để Flutter giải mã ra Reply/Emoji
+                        metadata = m.Metadata, 
                         createdAt = m.CreatedAt 
                     };
                 });
@@ -144,16 +146,12 @@ namespace ChatApp.Api.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { 
-                    message = "Lỗi server khi tải lịch sử chat.", 
-                    error = ex.Message, 
-                    inner = ex.InnerException?.Message 
-                });
+                return StatusCode(500, new { message = "Lỗi server khi tải lịch sử chat.", error = ex.Message });
             }
         }
 
         // ==========================================
-        // 🚀 3. TẠO NHÓM CHAT (Tự động cấp quyền Admin)
+        // 🚀 3. TẠO NHÓM CHAT 
         // ==========================================
         public class CreateGroupRequest
         {
@@ -178,13 +176,11 @@ namespace ChatApp.Api.Controllers
                 await _db.Conversations.AddAsync(newGroup);
                 await _db.SaveChangesAsync();
 
-                // 🎯 Người tạo nhóm Auto thành Trưởng Nhóm (admin)
                 var participants = new List<Participant>
                 {
                     new Participant { ConversationId = newGroup.Id, UserId = currentUserId, Role = "admin", JoinedAt = DateTime.UtcNow }
                 };
 
-                // Thêm các thành viên được chọn vào (Loại bỏ ID trùng và ID của chính mình)
                 foreach (var memberId in request.MemberIds.Distinct())
                 {
                     if (memberId != currentUserId)
@@ -216,17 +212,13 @@ namespace ChatApp.Api.Controllers
             if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var currentUserId))
                 return Unauthorized();
 
-            // Kiểm tra xem người đang request có nằm trong nhóm này không
             var isMember = await _db.Participants.AnyAsync(p => p.ConversationId == conversationId && p.UserId == currentUserId);
             if (!isMember) return StatusCode(403, new { message = "Bạn không thuộc nhóm này." });
 
             var group = await _db.Conversations.FindAsync(conversationId);
             if (group == null || group.IsGroup == false) return BadRequest(new { message = "Đây không phải là nhóm chat." });
 
-            // Lọc ra những người ĐÃ CÓ trong nhóm
             var existingMembers = await _db.Participants.Where(p => p.ConversationId == conversationId).Select(p => p.UserId).ToListAsync();
-            
-            // Những người thực sự MỚI
             var toAdd = newMemberIds.Except(existingMembers).Distinct().ToList();
 
             if (!toAdd.Any()) return BadRequest(new { message = "Các thành viên này đã có trong nhóm rồi." });
@@ -243,7 +235,7 @@ namespace ChatApp.Api.Controllers
         }
 
         // ==========================================
-        // 🚀 5. KICK THÀNH VIÊN (Chỉ Admin mới làm được)
+        // 🚀 5. KICK THÀNH VIÊN
         // ==========================================
         [HttpDelete("{conversationId}/members/{userIdToKick}")]
         public async Task<IActionResult> KickMember(Guid conversationId, Guid userIdToKick)
@@ -252,12 +244,9 @@ namespace ChatApp.Api.Controllers
             if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var currentUserId))
                 return Unauthorized();
 
-            // 🎯 Lấy Role của user đang thao tác
             var currentUser = await _db.Participants.FirstOrDefaultAsync(p => p.ConversationId == conversationId && p.UserId == currentUserId);
-            
             if (currentUser == null) return NotFound(new { message = "Bạn không có trong nhóm này." });
             
-            // 🎯 Check quyền: Nếu không phải Admin thì từ chối!
             if (currentUser.Role != "admin")
                 return StatusCode(403, new { message = "Chỉ trưởng nhóm (admin) mới có quyền mời người khác ra khỏi nhóm." });
 
@@ -272,6 +261,7 @@ namespace ChatApp.Api.Controllers
 
             return Ok(new { message = "Đã mời thành viên ra khỏi nhóm." });
         }
+
         // ==========================================
         // 🚀 6. LẤY DANH SÁCH THÀNH VIÊN TRONG NHÓM
         // ==========================================
@@ -280,12 +270,13 @@ namespace ChatApp.Api.Controllers
         {
             var members = await _db.Participants
                 .Where(p => p.ConversationId == conversationId)
-                .Include(p => p.User) // Join bảng để lấy Tên và Avatar
+                .Include(p => p.User) 
                 .Select(p => new
                 {
                     userId = p.UserId,
-                    fullName = p.User.Fullname,
-                    avatarUrl = p.User.Avatarurl,
+                    // 🎯 Đã gỡ cảnh báo Null CS8602
+                    fullName = p.User != null ? p.User.Fullname : "Unknown",
+                    avatarUrl = p.User != null ? p.User.Avatarurl : "",
                     role = p.Role,
                     joinedAt = p.JoinedAt
                 })
@@ -304,18 +295,94 @@ namespace ChatApp.Api.Controllers
             if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var currentUserId))
                 return Unauthorized();
 
-            // 🎯 ĐÃ SỬA: Viết Query trực tiếp, bỏ qua Include để tránh lỗi Model
             var groups = await _db.Conversations
                 .Where(c => c.IsGroup == true && _db.Participants.Any(p => p.ConversationId == c.Id && p.UserId == currentUserId))
                 .Select(c => new {
                     id = c.Id,
                     groupName = c.GroupName,
                     groupAvatarUrl = c.GroupAvatarUrl,
-                    myRole = _db.Participants.FirstOrDefault(p => p.ConversationId == c.Id && p.UserId == currentUserId).Role
+                    // 🎯 Đã gỡ cảnh báo Null CS8602 bằng Query an toàn
+                    myRole = _db.Participants.Where(p => p.ConversationId == c.Id && p.UserId == currentUserId).Select(p => p.Role).FirstOrDefault()
                 })
                 .ToListAsync();
 
             return Ok(groups);
+        }
+
+        // ==========================================
+        // 🚀 8. THU HỒI TIN NHẮN
+        // ==========================================
+        [HttpPut("messages/{messageId}/revoke")]
+        public async Task<IActionResult> RevokeMessage(Guid messageId)
+        {
+            var currentUserId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var msg = await _db.Messages.FindAsync(messageId);
+            
+            if (msg == null) return NotFound(new { message = "Không tìm thấy tin nhắn." });
+
+            if (msg.SenderId.ToString() != currentUserId)
+                return BadRequest(new { message = "Bạn không thể thu hồi tin nhắn của người khác." });
+
+            if ((DateTime.UtcNow - msg.CreatedAt).TotalMinutes > 5)
+                return BadRequest(new { message = "Chỉ có thể thu hồi tin nhắn trong vòng 5 phút sau khi gửi." });
+
+            msg.Type = "revoked";
+            msg.Ciphertext = ""; 
+            msg.Nonce = "";
+            msg.Tag = "";
+            
+            await _db.SaveChangesAsync();
+
+            return Ok(new { message = "Đã thu hồi tin nhắn thành công." });
+        }
+
+        // ==========================================
+        // 🚀 9. XÓA PHÍA TÔI (Bên kia vẫn thấy)
+        // ==========================================
+        [HttpPut("messages/{messageId}/delete-local")]
+        public async Task<IActionResult> DeleteMessageForMe(Guid messageId)
+        {
+            var currentUserId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var msg = await _db.Messages.FindAsync(messageId);
+            
+            if (msg == null) return NotFound();
+
+            // 🎯 SỬA LỖI CS8121: Trích xuất JsonDocument cực chuẩn
+            string metaString = msg.Metadata != null ? msg.Metadata.RootElement.GetRawText() : "";
+
+            JsonObject metaNode;
+            try {
+                metaNode = string.IsNullOrWhiteSpace(metaString) ? new JsonObject() : JsonNode.Parse(metaString)?.AsObject() ?? new JsonObject();
+            } catch {
+                metaNode = new JsonObject();
+            }
+
+            JsonArray deletedForArray = metaNode.ContainsKey("deletedFor") && metaNode["deletedFor"] is JsonArray arr 
+                ? arr 
+                : new JsonArray();
+
+            bool alreadyDeleted = false;
+            foreach (var item in deletedForArray)
+            {
+                if (item?.ToString() == currentUserId)
+                {
+                    alreadyDeleted = true;
+                    break;
+                }
+            }
+
+            if (!alreadyDeleted)
+            {
+                deletedForArray.Add(currentUserId);
+                metaNode["deletedFor"] = deletedForArray;
+                
+                msg.Metadata = JsonDocument.Parse(metaNode.ToJsonString());
+                
+                _db.Entry(msg).State = EntityState.Modified;
+                await _db.SaveChangesAsync();
+            }
+
+            return Ok(new { message = "Đã xóa tin nhắn ở phía bạn." });
         }
     }
 }

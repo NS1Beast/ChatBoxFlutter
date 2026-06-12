@@ -1,15 +1,21 @@
 // ignore_file: file_names
 import 'dart:convert'; 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart'; // 🎯 Thêm cái này để check phase
 
 import '../../contacts/ContactsController.dart'; 
 
 class ChatListPanel extends StatefulWidget {
-  final ContactsController controller; // 🎯 NHẬN CHUNG 1 BỘ NHỚ TỪ DASHBOARD
+  final ContactsController controller; 
   final Function(Map<String, dynamic>) onChatSelected;
   final Function(Map<String, dynamic>)? onGlobalSearchFound; 
   
-  const ChatListPanel({super.key, required this.controller, required this.onChatSelected, this.onGlobalSearchFound});
+  const ChatListPanel({
+    super.key, 
+    required this.controller, 
+    required this.onChatSelected, 
+    this.onGlobalSearchFound
+  });
 
   @override
   State<ChatListPanel> createState() => _ChatListPanelState();
@@ -24,22 +30,36 @@ class _ChatListPanelState extends State<ChatListPanel> {
   @override
   void initState() {
     super.initState();
-    widget.controller.loadFriends();
-    widget.controller.loadGroups(); 
-    
-    // Lắng nghe khi có nhóm/bạn mới tạo thì vẽ lại màn hình
-    widget.controller.addListener(_onDataChanged);
+    // 🎯 CHỈ ĐĂNG KÝ LISTENER SAU KHI VẼ XONG
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        widget.controller.addListener(_safeOnDataChanged);
+        widget.controller.loadFriends();
+        widget.controller.loadGroups(); 
+      }
+    });
   }
 
-  void _onDataChanged() {
-    if (mounted) setState(() {});
+  // 🎯 HÀM BỌC AN TOÀN TUYỆT ĐỐI CHO SETSTATE
+  void _safeOnDataChanged() {
+    if (!mounted) return;
+    
+    // Nếu Flutter đang bận xếp gạch vẽ màn hình, thì xếp lịch gọi lại sau.
+    if (SchedulerBinding.instance.schedulerPhase != SchedulerPhase.idle) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() {});
+      });
+    } else {
+      // Nếu rảnh thì vẽ lại luôn
+      setState(() {});
+    }
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
     _searchCtrl.dispose();
-    widget.controller.removeListener(_onDataChanged);
+    widget.controller.removeListener(_safeOnDataChanged);
     super.dispose();
   }
 
@@ -75,13 +95,10 @@ class _ChatListPanelState extends State<ChatListPanel> {
   Widget build(BuildContext context) {
     final textColor = Theme.of(context).colorScheme.onSurface;
 
-    // ========================================================
-    // 🎯 GỘP CHUNG BẠN BÈ VÀ NHÓM VÀO 1 DANH SÁCH DUY NHẤT
-    // ========================================================
     final List<Map<String, dynamic>> unifiedList = [];
     
     for (var f in widget.controller.filteredFriends) {
-      unifiedList.add({...f, 'isGroup': false}); // Đánh dấu là cá nhân
+      unifiedList.add({...f, 'isGroup': false});
     }
     
     for (var g in widget.controller.filteredGroups) {
@@ -89,7 +106,8 @@ class _ChatListPanelState extends State<ChatListPanel> {
         'id': g['id'],
         'name': g['groupName'] ?? 'Nhóm',
         'avatarUrl': g['groupAvatarUrl'],
-        'isGroup': true, // Đánh dấu là Nhóm
+        'isGroup': true, 
+        ...g
       });
     }
 
@@ -99,8 +117,8 @@ class _ChatListPanelState extends State<ChatListPanel> {
           padding: const EdgeInsets.all(16.0),
           child: TextField(
             controller: _searchCtrl,
-            onChanged: widget.controller.updateSearch, // Vừa gõ vừa lọc ngay trên List
-            onSubmitted: _performSearch, // Bấm Enter để tìm người lạ qua API
+            onChanged: widget.controller.updateSearch, 
+            onSubmitted: _performSearch, 
             decoration: InputDecoration(
               hintText: 'Tìm bạn bè hoặc nhóm...',
               hintStyle: TextStyle(color: textColor.withValues(alpha: 0.5)),
@@ -131,11 +149,11 @@ class _ChatListPanelState extends State<ChatListPanel> {
                   return _HoverableChatItem(
                     name: item['name'],
                     avatarProvider: _getSmartAvatar(item['avatarUrl'], item['name']), 
-                    isGroup: item['isGroup'], // 🎯 Hiển thị thêm icon nhỏ nếu là nhóm
+                    isGroup: item['isGroup'], 
                     isSelected: _selectedChatId == item['id'],
                     onTap: () {
                       setState(() => _selectedChatId = item['id']);
-                      widget.onChatSelected(item); // Bắn nguyên cục này sang MainChat
+                      widget.onChatSelected(item); 
                     },
                   );
                 },
@@ -151,7 +169,7 @@ class _HoverableChatItem extends StatefulWidget {
   final String name;
   final ImageProvider avatarProvider; 
   final bool isSelected;
-  final bool isGroup;
+  final bool isGroup; 
   final VoidCallback onTap;
 
   const _HoverableChatItem({
@@ -193,7 +211,7 @@ class _HoverableChatItemState extends State<_HoverableChatItem> {
               Stack(
                 children: [
                   CircleAvatar(radius: 24, backgroundImage: widget.avatarProvider),
-                  if (widget.isGroup) // Đính kèm icon Group nhỏ góc dưới avatar
+                  if (widget.isGroup) 
                     Positioned(
                       right: -2, bottom: -2,
                       child: Container(

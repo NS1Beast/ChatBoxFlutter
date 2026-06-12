@@ -90,9 +90,37 @@ class LocalDbService {
   // ========================================================
   // 🎯 BỘ HÀM ĐÃ ĐƯỢC BỌC GIÁP CHỐNG CRASH TRÊN WEB
   // ========================================================
+  Future<void> updateMessageContent(String messageId, String newContent, String newType) async {
+    if (kIsWeb) return; 
+    try {
+      final db = await database;
+      await db.update(
+        'LocalMessages', // 🎯 Đã sửa: Phải dùng LocalMessages mới đúng tên bảng
+        {'content': newContent, 'type': newType},
+        where: 'id = ?',
+        whereArgs: [messageId],
+      );
+    } catch (e) {
+      debugPrint("Lỗi cập nhật local DB: $e");
+    }
+  }
 
+  Future<void> deleteMessageLocal(String messageId) async {
+    if (kIsWeb) return; 
+    try {
+      final db = await database;
+      await db.delete(
+        'LocalMessages', // 🎯 Đã sửa: Phải dùng LocalMessages mới đúng tên bảng
+        where: 'id = ?',
+        whereArgs: [messageId],
+      );
+    } catch (e) {
+      debugPrint("Lỗi xóa local DB: $e");
+    }
+  }
+  
   Future<void> saveMessage(Map<String, dynamic> msg, String conversationId, String? replyText) async {
-    if (kIsWeb) return; // 🛑 NẾU LÀ WEB: Bỏ qua không lưu, không làm gì cả
+    if (kIsWeb) return; 
     
     final db = await database;
     await db.insert('LocalMessages', {
@@ -107,7 +135,7 @@ class LocalDbService {
   }
 
   Future<List<Map<String, dynamic>>> getMessages(String conversationId) async {
-    if (kIsWeb) return []; // 🛑 NẾU LÀ WEB: Trả về danh sách rỗng để nó gọi API
+    if (kIsWeb) return []; 
 
     final db = await database;
     return await db.query(
@@ -119,7 +147,7 @@ class LocalDbService {
   }
 
   Future<String?> getLastMessageTime(String conversationId) async {
-    if (kIsWeb) return null; // 🛑 NẾU LÀ WEB: Trả về null để API lôi toàn bộ tin nhắn xuống
+    if (kIsWeb) return null; 
 
     final db = await database;
     final result = await db.query(

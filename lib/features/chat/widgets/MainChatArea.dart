@@ -13,11 +13,10 @@ import '../../contacts/ContactsController.dart';
 import '../widgets/add_member_dialog.dart';
 import '../../auth/AuthController.dart';
 import '../../../core/services/signalr_service.dart'; 
-import '../../../core/services/local_db_service.dart'; 
 import '../../../core/services/group_api_service.dart'; 
-
+import '../../../core/services/local_db_service.dart';
 class MainChatArea extends StatefulWidget {
-  final String chatId; // Đối với nhóm, đây là conversationId
+  final String chatId; 
   final String chatName;
   final String chatAvatar;
   final String chatCover;
@@ -48,7 +47,12 @@ class _MainChatAreaState extends State<MainChatArea> {
   final ScrollController _scrollController = ScrollController();
   bool _showInfoPanel = false;
   final ContactsController _contactController = ContactsController();
+  
+  // 🎯 GIẢI PHÁP MỚI: Dùng 3 mảng song song để tránh đụng chạm sửa model ChatMessage gốc của ông
   List<ChatMessage> messages = [];
+  List<String> messageIds = [];
+  List<DateTime?> messageCreatedAts = [];
+
   late ImageProvider _cachedAvatar;
 
   final SignalRService _signalR = SignalRService();
@@ -185,35 +189,11 @@ class _MainChatAreaState extends State<MainChatArea> {
       if (_currentConversationId == null || _currentConversationId!.isEmpty) return;
 
       await _signalR.joinConversation(_currentConversationId!);
-      
       if (widget.isGroup) await _fetchGroupMembers();
 
-      final localDb = LocalDbService();
-      final localMsgs = await localDb.getMessages(_currentConversationId!);
-      
-      if (localMsgs.isNotEmpty && mounted && initializingChatId == widget.chatId) {
-        setState(() {
-          messages = localMsgs.map((m) {
-            final isMyMessage = m['senderId'].toString().toLowerCase() == _currentUserId.toLowerCase();
-            return ChatMessage(
-              text: m['content'] ?? '',
-              type: m['type'] ?? 'text',
-              isMe: isMyMessage,
-              time: _formatTime(m['createdAt']), 
-              replyToText: m['replyToText'], 
-            );
-          }).toList();
-        });
-        _scrollToBottom();
-      }
-
-      String? lastTime = await localDb.getLastMessageTime(_currentConversationId!);
+      // 🎯 Bypass SQLite, tải toàn bộ mảng chuẩn từ Server để không bị rác (Bỏ always tham số since)
       String apiUrl = 'http://localhost:5034/api/Conversations/$_currentConversationId/messages';
       
-      if (lastTime != null) {
-        apiUrl += '?since=${Uri.encodeComponent(lastTime)}';
-      }
-
       final historyRes = await http.get(
         Uri.parse(apiUrl),
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer $token' },
@@ -224,13 +204,19 @@ class _MainChatAreaState extends State<MainChatArea> {
       if (historyRes.statusCode == 200) {
         final List<dynamic> newServerData = jsonDecode(historyRes.body);
 
-        if (newServerData.isNotEmpty) {
-          final validMessages = newServerData.where((m) {
-            final type = (m['type'] ?? 'text').toString();
-            return !(type == 'offer_video' || type == 'offer_voice' || type == 'answer' || type == 'ice' || type == 'end' || type.startsWith('webrtc_'));
-          }).toList();
+        // 🎯 MÀNG LỌC ĐỂ DỌN SẠCH TÍN HIỆU RÁC UUID (revoke_signal)
+        final validMessages = newServerData.where((m) {
+          final type = (m['type'] ?? 'text').toString();
+          return !(type == 'offer_video' || type == 'offer_voice' || type == 'answer' || type == 'ice' || type == 'end' || type.startsWith('webrtc_') || type == 'revoke_signal');
+        }).toList();
+
+        setState(() {
+          messages.clear();
+          messageIds.clear();
+          messageCreatedAts.clear();
 
           for (var m in validMessages) {
+            final isMyMessage = m['senderId'].toString().toLowerCase() == _currentUserId.toLowerCase();
             String? historyReplyText;
             final metaRaw = m['metadata'] ?? m['Metadata']; 
             if (metaRaw != null) {
@@ -239,26 +225,19 @@ class _MainChatAreaState extends State<MainChatArea> {
                 historyReplyText = meta['replyToText']?.toString();
               } catch (_) {}
             }
-            await localDb.saveMessage(m, _currentConversationId!, historyReplyText);
-          }
 
-          final updatedLocalMsgs = await localDb.getMessages(_currentConversationId!);
-          if (mounted && initializingChatId == widget.chatId) {
-            setState(() {
-              messages = updatedLocalMsgs.map((m) {
-                final isMyMessage = m['senderId'].toString().toLowerCase() == _currentUserId.toLowerCase();
-                return ChatMessage(
-                  text: m['content'] ?? '',
-                  type: m['type'] ?? 'text',
-                  isMe: isMyMessage,
-                  time: _formatTime(m['createdAt']), 
-                  replyToText: m['replyToText'], 
-                );
-              }).toList();
-            });
-            _scrollToBottom();
+            messages.add(ChatMessage(
+              text: m['content'] ?? '',
+              type: m['type'] ?? 'text',
+              isMe: isMyMessage,
+              time: _formatTime(m['createdAt']), 
+              replyToText: historyReplyText, 
+            ));
+            messageIds.add(m['id']?.toString() ?? '');
+            messageCreatedAts.add(m['createdAt'] != null ? DateTime.tryParse(m['createdAt'].toString()) : null);
           }
-        }
+        });
+        _scrollToBottom();
 
         if (widget.autoStartVoiceCall) {
           _openCallScreen(isVideo: false);
@@ -283,9 +262,31 @@ class _MainChatAreaState extends State<MainChatArea> {
     if (msgConversationId != currentConversationId) return;
 
     final type = (msg['type'] ?? msg['Type'] ?? 'text').toString();
+    final content = (msg['content'] ?? msg['Content'] ?? '').toString();
+
+    // 🎯 THUẬT TOÁN ĐỔI UI TỨC THÌ KHI NHẬN LỆNH THU HỒI TỪ SIGNALR
+    if (type == 'revoke_signal') {
+      if (mounted) {
+        setState(() {
+          final targetIndex = messageIds.indexOf(content);
+          if (targetIndex != -1) {
+            final old = messages[targetIndex];
+            // Thay thế Object thay vì gán biến final
+            messages[targetIndex] = ChatMessage(
+              text: 'Tin nhắn đã được thu hồi',
+              type: 'revoked',
+              isMe: old.isMe,
+              time: old.time,
+              replyToText: old.replyToText,
+            );
+          }
+        });
+      }
+      return; // 🎯 Dừng ở đây, không append tín hiệu rác (UUID) vào mảng tin nhắn
+    }
+
     final senderId = (msg['senderId'] ?? msg['SenderId'])?.toString().toLowerCase();
     final isMyMessage = senderId == _currentUserId.toLowerCase();
-    final content = (msg['content'] ?? msg['Content'] ?? '').toString();
 
     if (type == 'offer_video' || type == 'offer_voice' || type == 'answer' || type == 'ice' || type == 'end' || type.startsWith('webrtc_')) return;
 
@@ -298,14 +299,18 @@ class _MainChatAreaState extends State<MainChatArea> {
       } catch (_) {}
     }
 
-    await LocalDbService().saveMessage(msg, _currentConversationId!, incomingReplyText);
-
     if (mounted) {
       setState(() {
         final timeString = msg['createdAt'] ?? msg['CreatedAt'];
 
+        // Xóa dòng 'Đang gửi'
         if (isMyMessage) {
-          messages.removeWhere((m) => m.time == 'Đang gửi...' && m.text == content);
+          final tempIndex = messages.indexWhere((m) => m.time == 'Đang gửi...' && m.text == content);
+          if (tempIndex != -1) {
+            messages.removeAt(tempIndex);
+            messageIds.removeAt(tempIndex);
+            messageCreatedAts.removeAt(tempIndex);
+          }
         }
 
         messages.add(ChatMessage(
@@ -315,9 +320,77 @@ class _MainChatAreaState extends State<MainChatArea> {
           time: _formatTime(timeString),
           replyToText: incomingReplyText, 
         ));
+        messageIds.add(msg['id']?.toString() ?? '');
+        messageCreatedAts.add(timeString != null ? DateTime.tryParse(timeString.toString()) : null);
       });
     }
     _scrollToBottom();
+  }
+
+  // 🎯 HÀM GỌI API THU HỒI TIN NHẮN 
+  Future<void> _handleRevokeMessage(String messageId) async {
+    try {
+      final token = await const FlutterSecureStorage().read(key: 'jwt_token');
+      final res = await http.put(
+        Uri.parse('http://localhost:5034/api/Conversations/messages/$messageId/revoke'),
+        headers: { 'Authorization': 'Bearer $token' },
+      );
+      
+      if (res.statusCode == 200) {
+        if (mounted) {
+          setState(() {
+            final targetIndex = messageIds.indexOf(messageId);
+            if (targetIndex != -1) {
+              final old = messages[targetIndex];
+              messages[targetIndex] = ChatMessage(
+                text: 'Tin nhắn đã được thu hồi',
+                type: 'revoked',
+                isMe: old.isMe,
+                time: old.time,
+                replyToText: old.replyToText,
+              );
+            }
+          });
+        }
+        // 🎯 GỌI HÀM UPDATE VÀO SQLITE ĐỂ KHÔNG BỊ LOAD LẠI TIN NHẮN CŨ
+        await LocalDbService().updateMessageContent(messageId, 'Tin nhắn đã được thu hồi', 'revoked');
+        
+        await _signalR.sendMessage(_currentConversationId!, messageId, 'revoke_signal');
+      } else {
+        final error = (res.body.isNotEmpty) ? jsonDecode(res.body)['message'] : 'Lỗi thu hồi';
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+      }
+    } catch (e) {
+      debugPrint("Lỗi thu hồi: $e");
+    }
+  }
+
+  // 🎯 HÀM GỌI API XÓA PHÍA TÔI
+  Future<void> _handleDeleteForMe(String messageId) async {
+    try {
+      final token = await const FlutterSecureStorage().read(key: 'jwt_token');
+      final res = await http.put(
+        Uri.parse('http://localhost:5034/api/Conversations/messages/$messageId/delete-local'),
+        headers: { 'Authorization': 'Bearer $token' },
+      );
+      
+      if (res.statusCode == 200) {
+        if (mounted) {
+          setState(() {
+            final targetIndex = messageIds.indexOf(messageId);
+            if (targetIndex != -1) {
+              messages.removeAt(targetIndex);
+              messageIds.removeAt(targetIndex);
+              messageCreatedAts.removeAt(targetIndex);
+            }
+          });
+        }
+        // 🎯 GỌI HÀM XÓA TRỰC TIẾP VÀO SQLITE ĐỂ KHÔNG BỊ "HỒI SINH" TIN NHẮN
+        await LocalDbService().deleteMessageLocal(messageId);
+      }
+    } catch (e) {
+      debugPrint("Lỗi xóa phía tôi: $e");
+    }
   }
 
   void _handleSend(String text, {String type = 'text'}) async {
@@ -344,15 +417,26 @@ class _MainChatAreaState extends State<MainChatArea> {
         time: 'Đang gửi...', 
         replyToText: repliedText, 
       ));
+      messageIds.add('temp_${DateTime.now().millisecondsSinceEpoch}');
+      messageCreatedAts.add(DateTime.now());
     });
     _scrollToBottom();
 
     try {
       await _signalR.sendMessage(_currentConversationId!, text, type, metadata: metadataJsonString); 
+      // Sau 1s tự lấy Data chuẩn có ID từ server bù lại
+      Future.delayed(const Duration(seconds: 1), () {
+         if (mounted) _initializeChat();
+      });
     } catch (e) {
       if (mounted) {
         setState(() {
-          messages.removeWhere((m) => m.time == 'Đang gửi...' && m.text == text);
+          final tempIndex = messages.indexWhere((m) => m.time == 'Đang gửi...' && m.text == text);
+          if (tempIndex != -1) {
+            messages.removeAt(tempIndex);
+            messageIds.removeAt(tempIndex);
+            messageCreatedAts.removeAt(tempIndex);
+          }
         });
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Không thể gửi tin nhắn!')));
       }
@@ -419,36 +503,41 @@ class _MainChatAreaState extends State<MainChatArea> {
                 Expanded(
                   child: messages.isEmpty 
                     ? _buildEmptyChatState(textColor) 
-                    : RepaintBoundary(
-                        child: RawScrollbar(
+                    : RawScrollbar(
+                        controller: _scrollController,
+                        thumbColor: textColor.withValues(alpha: 0.2),
+                        radius: const Radius.circular(8),
+                        thickness: 6,
+                        child: ListView.builder(
                           controller: _scrollController,
-                          thumbColor: textColor.withValues(alpha: 0.2),
-                          radius: const Radius.circular(8),
-                          thickness: 6,
-                          child: ListView.builder(
-                            controller: _scrollController,
-                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-                            itemCount: messages.length,
-                            itemBuilder: (context, index) {
-                              final message = messages[index];
-                              return HoverableMessageBubble(
-                                key: ValueKey('${message.text}_${message.time}_$index'),
-                                message: message,
-                                onReply: (msg) {
-                                  setState(() { _replyingToMessage = msg; });
-                                },
-                                onReact: (emoji) {
-                                  setState(() {
-                                    if (messages[index].reactions.containsKey(emoji)) {
-                                      messages[index].reactions[emoji] = messages[index].reactions[emoji]! + 1;
-                                    } else {
-                                      messages[index].reactions[emoji] = 1;
-                                    }
-                                  });
-                                },
-                              );
-                            },
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                          itemCount: messages.length,
+                          itemBuilder: (context, index) {
+                            final message = messages[index];
+                            final realMessageId = messageIds[index];
+                            final realCreatedAt = messageCreatedAts[index];
+
+                            return HoverableMessageBubble(
+                              key: ValueKey('${realMessageId}_$index'),
+                              message: message,
+                              onRevoke: () => _handleRevokeMessage(realMessageId),
+                              onDeleteForMe: () => _handleDeleteForMe(realMessageId),
+                              // 🎯 Đã gài logic kiểm tra quá 5 phút
+                              canRevoke: message.isMe && realCreatedAt != null && DateTime.now().difference(realCreatedAt).inMinutes <= 5,
+                              onReply: (msg) {
+                                setState(() { _replyingToMessage = msg; });
+                              },
+                              onReact: (emoji) {
+                                setState(() {
+                                  if (messages[index].reactions.containsKey(emoji)) {
+                                    messages[index].reactions[emoji] = messages[index].reactions[emoji]! + 1;
+                                  } else {
+                                    messages[index].reactions[emoji] = 1;
+                                  }
+                                });
+                              },
+                            );
+                          },
                         ),
                       ),
                 ),
@@ -586,7 +675,6 @@ class _MainChatAreaState extends State<MainChatArea> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center, 
               children: [
-                // 🎯 ĐÃ GẮN POPUP VÀO NÚT THÊM BẠN
                 _buildInfoActionBtn(Icons.group_add_rounded, 'Thêm bạn', textColor, onTap: () async {
                   final result = await showDialog(
                     context: context,

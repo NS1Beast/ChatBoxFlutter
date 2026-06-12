@@ -1,3 +1,4 @@
+// ignore_file: file_names
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' as foundation;
 import 'dart:async';
@@ -5,7 +6,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 
-import 'VoiceRecordingWidgets.dart'; // Đảm bảo đúng tên file của ông
+import 'VoiceRecordingWidgets.dart'; 
 
 class ChatInputArea extends StatefulWidget {
   final Function(String text) onSendMessage;
@@ -42,7 +43,7 @@ class _ChatInputAreaState extends State<ChatInputArea> {
   @override
   void initState() {
     super.initState();
-    _fetchTrendingGifs(); // Load ảnh GIF thịnh hành lúc mới mở
+    _fetchTrendingGifs(); 
   }
 
   @override
@@ -57,20 +58,23 @@ class _ChatInputAreaState extends State<ChatInputArea> {
   // LOGIC API GIPHY
   // ==========================================
   Future<void> _fetchTrendingGifs() async {
-    if (_giphyApiKey == 'YOUR_GIPHY_API_KEY') return; // Bỏ qua nếu chưa có API Key
-    setState(() => _isLoadingGifs = true);
+    if (_giphyApiKey == 'YOUR_GIPHY_API_KEY') return; 
+    
+    if (mounted) setState(() => _isLoadingGifs = true);
     try {
       final response = await http.get(Uri.parse('https://api.giphy.com/v1/gifs/trending?api_key=$_giphyApiKey&limit=20&rating=g'));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        setState(() {
-          _gifUrls = (data['data'] as List).map((gif) => gif['images']['fixed_height']['url'].toString()).toList();
-        });
+        if (mounted) { // 🎯 KẸP ĐIỀU KIỆN
+          setState(() {
+            _gifUrls = (data['data'] as List).map((gif) => gif['images']['fixed_height']['url'].toString()).toList();
+          });
+        }
       }
     } catch (e) {
       debugPrint('Lỗi tải GIF: $e');
     } finally {
-      setState(() => _isLoadingGifs = false);
+      if (mounted) setState(() => _isLoadingGifs = false); // 🎯 KẸP ĐIỀU KIỆN
     }
   }
 
@@ -83,19 +87,21 @@ class _ChatInputAreaState extends State<ChatInputArea> {
       }
       if (_giphyApiKey == 'YOUR_GIPHY_API_KEY') return;
       
-      setState(() => _isLoadingGifs = true);
+      if (mounted) setState(() => _isLoadingGifs = true); // 🎯 KẸP ĐIỀU KIỆN
       try {
         final response = await http.get(Uri.parse('https://api.giphy.com/v1/gifs/search?api_key=$_giphyApiKey&q=$query&limit=20&rating=g'));
         if (response.statusCode == 200) {
           final data = json.decode(response.body);
-          setState(() {
-            _gifUrls = (data['data'] as List).map((gif) => gif['images']['fixed_height']['url'].toString()).toList();
-          });
+          if (mounted) { // 🎯 KẸP ĐIỀU KIỆN
+            setState(() {
+              _gifUrls = (data['data'] as List).map((gif) => gif['images']['fixed_height']['url'].toString()).toList();
+            });
+          }
         }
       } catch (e) {
         debugPrint('Lỗi tìm GIF: $e');
       } finally {
-        setState(() => _isLoadingGifs = false);
+        if (mounted) setState(() => _isLoadingGifs = false); // 🎯 KẸP ĐIỀU KIỆN
       }
     });
   }
@@ -109,8 +115,14 @@ class _ChatInputAreaState extends State<ChatInputArea> {
       _isRecording = true;
       _recordDuration = 0;
     });
+    
+    // 🎯 SỬA LỖI ĐƠ APP LÚC ĐANG GHI ÂM CHUYỂN GROUP
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      setState(() => _recordDuration++);
+      if (mounted) { 
+        setState(() => _recordDuration++);
+      } else {
+        timer.cancel(); // Tự hủy Timer nếu màn hình đã chết
+      }
     });
   }
 
@@ -276,7 +288,6 @@ class _ChatInputAreaState extends State<ChatInputArea> {
     );
   }
 
-  // (Phần khung chat bên dưới giữ nguyên như lúc nãy)
   Widget _buildChatInputBar(Color textColor, Color primaryColor) {
     return Row(
       key: const ValueKey('chat_input'),

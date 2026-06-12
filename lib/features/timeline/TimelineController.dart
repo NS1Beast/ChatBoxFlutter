@@ -43,7 +43,7 @@ class TimelineController extends ChangeNotifier {
       userName: 'Trần Thị B', 
       userAvatar: 'https://i.pravatar.cc/150?img=5', 
       timeAgo: '15 phút trước', 
-      content: 'Hôm nay trời đẹp quá! Đi cafe thôi ☕️', 
+      content: 'Đi cà phê', 
       mediaType: 'image', 
       mediaUrl: 'https://picsum.photos/seed/cafe/600/400', 
       likes: 12, comments: 3
@@ -54,7 +54,7 @@ class TimelineController extends ChangeNotifier {
       userName: 'Lê Hoàng C', 
       userAvatar: 'https://i.pravatar.cc/150?img=8', 
       timeAgo: '2 giờ trước', 
-      content: 'Vừa hoàn thành xong module UI bằng Flutter. Cảm giác thật tuyệt vời! Mượt mà và xịn xò 🚀', 
+      content: 'Vừa làm xong việc', 
       mediaType: 'none', likes: 45, comments: 10
     ),
     Post(
@@ -63,7 +63,7 @@ class TimelineController extends ChangeNotifier {
       userName: 'Nguyễn Văn A', 
       userAvatar: 'https://i.pravatar.cc/150?img=12', 
       timeAgo: 'Hôm qua', 
-      content: 'Chill cùng bản nhạc này nhé mọi người 🎵', 
+      content: 'Chill cùng bản nhạc này', 
       mediaType: 'music', likes: 8, comments: 1
     ),
   ];

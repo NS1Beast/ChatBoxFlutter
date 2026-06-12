@@ -49,16 +49,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _pages = [
       _buildChatTab(),
       ContactsScreen(
+        controller: _globalContactsController,
         onStartChat: (String userId) {
           _activeChatUser.value = {
             'id': userId,
-            'name': 'Người dùng', 
+            'name': 'Người dùng',
             'avatarUrl': '',
             'bio': '',
           };
           _searchedUser.value = null;
-          _selectedIndex.value = 0; 
-        }
+          _selectedIndex.value = 0;
+        },
       ),
       const TimelineScreen(),
       const NotificationsScreen(),
@@ -151,6 +152,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Expanded(
               child: searchedUser != null 
                 ? FriendProfileScreen(
+                    // 🎯 Thêm KEY để reset màn hình Profile
+                    key: ValueKey('profile_${searchedUser['id']}'),
                     userId: searchedUser['id'],
                     userName: searchedUser['fullName'] ?? 'Người dùng',
                     avatarUrl: searchedUser['avatarUrl'] ?? '',
@@ -161,14 +164,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   )
                 : activeChatUser != null 
                     ? MainChatArea(
+                        // 🎯 CHÌA KHÓA VÀNG Ở ĐÂY: Hủy diệt màn hình cũ, tải lại sạch sẽ màn hình mới!
+                        key: ValueKey('chat_${activeChatUser['id']}'), 
                         chatId: activeChatUser['id'],
                         chatName: activeChatUser['fullName'] ?? activeChatUser['name'] ?? 'Người dùng',
-                        // 🎯 Lấy ảnh đại diện (nếu không có avatarUrl thì thử groupAvatarUrl)
                         chatAvatar: activeChatUser['avatarUrl'] ?? activeChatUser['groupAvatarUrl'] ?? '',
                         chatCover: activeChatUser['coverUrl'] ?? '',
                         chatBio: activeChatUser['bio'] ?? '',
                         relationStatus: activeChatUser['relationStatus'] ?? 'friend',
-                        // 🎯 QUAN TRỌNG NHẤT: Bơm cờ isGroup vào đây để MainChatArea bật giao diện nhóm!
                         isGroup: activeChatUser['isGroup'] ?? false, 
                       ) 
                     : const WelcomeScreen(), 

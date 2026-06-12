@@ -6,56 +6,76 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../auth/AuthController.dart'; 
 
 class ContactsController extends ChangeNotifier {
+  // 🎯 1. THÊM CỜ KIỂM TRA TRẠNG THÁI SỐNG/CHẾT CỦA CONTROLLER
+  bool _isDisposed = false;
+
   // --- STATE (Trạng thái) ---
   int currentTab = 0; // 0: Bạn bè, 1: Nhóm
   String searchQuery = "";
   
   Map<String, dynamic>? selectedFriend;
-  Map<String, dynamic>? selectedGroup; // 🎯 THÊM BIẾN QUẢN LÝ NHÓM ĐANG CHỌN
+  Map<String, dynamic>? selectedGroup; 
 
   // --- KẾT NỐI API BACKEND ---
   final String _baseUrl = 'http://localhost:5034/api/contacts';
-  final String _groupApiUrl = 'http://localhost:5034/api/Conversations'; // 🎯 THÊM URL NHÓM
+  final String _groupApiUrl = 'http://localhost:5034/api/Conversations'; 
   
   List<dynamic> friendsList = [];
-  List<dynamic> groupsList = []; // 🎯 THÊM LIST NHÓM
+  List<dynamic> groupsList = []; 
   bool isLoading = false;
 
   ContactsController() {
     _initData();
   }
 
+  // 🎯 2. ĐÁNH DẤU LÀ "ĐÃ CHẾT" KHI BỊ DISPOSE
+  @override
+  void dispose() {
+    _isDisposed = true; 
+    super.dispose();
+  }
+
+  // 🎯 3. HÀM NOTIFY AN TOÀN TUYỆT ĐỐI (Chỉ báo tin khi còn sống)
+  void _safeNotifyListeners() {
+    if (!_isDisposed) {
+      notifyListeners();
+    }
+  }
+
   Future<void> _initData() async {
     await loadFriends();
-    await loadGroups(); // 🎯 GỌI TẢI DANH SÁCH NHÓM
+    if (_isDisposed) return; // Đang chạy mà bị tắt app thì dừng luôn
+    
+    await loadGroups(); 
+    if (_isDisposed) return;
+
     if (friendsList.isNotEmpty) {
       selectedFriend = friendsList[0];
     }
-    notifyListeners();
+    _safeNotifyListeners();
   }
 
   // --- LOGIC GIAO DIỆN ---
   void switchTab(int index) {
     currentTab = index;
-    // Tự động chọn item đầu tiên khi chuyển tab cho UI khỏi trống
     if (index == 0 && friendsList.isNotEmpty) selectedFriend = friendsList[0];
     if (index == 1 && groupsList.isNotEmpty) selectedGroup = groupsList[0];
-    notifyListeners();
+    _safeNotifyListeners();
   }
 
   void selectFriend(Map<String, dynamic> friend) {
     selectedFriend = friend;
-    notifyListeners();
+    _safeNotifyListeners();
   }
 
   void selectGroup(Map<String, dynamic> group) {
     selectedGroup = group;
-    notifyListeners();
+    _safeNotifyListeners();
   }
 
   void updateSearch(String query) {
     searchQuery = query;
-    notifyListeners();
+    _safeNotifyListeners();
   }
 
   List<dynamic> get filteredFriends {
@@ -81,9 +101,11 @@ class ContactsController extends ChangeNotifier {
   // 1. Tải danh sách bạn bè
   Future<void> loadFriends() async {
     isLoading = true;
-    notifyListeners();
+    _safeNotifyListeners();
 
     String currentUserId = await AuthController().getCurrentUserId();
+    if (_isDisposed) return;
+
     if (currentUserId != "guest") {
       try {
         final response = await http.get(Uri.parse('$_baseUrl/list/$currentUserId'));
@@ -95,15 +117,18 @@ class ContactsController extends ChangeNotifier {
       }
     }
     
+    if (_isDisposed) return;
     isLoading = false;
-    notifyListeners();
+    _safeNotifyListeners();
   }
 
-  // 🎯 2. Tải danh sách Nhóm
+  // 2. Tải danh sách Nhóm
   Future<void> loadGroups() async {
     try {
       const storage = FlutterSecureStorage();
       String? token = await storage.read(key: 'jwt_token');
+      if (_isDisposed) return;
+
       final response = await http.get(
         Uri.parse('$_groupApiUrl/my-groups'),
         headers: { 'Authorization': 'Bearer $token' }
@@ -115,12 +140,14 @@ class ContactsController extends ChangeNotifier {
     } catch (e) {
       debugPrint("Lỗi tải danh sách nhóm: $e");
     }
-    notifyListeners();
+    _safeNotifyListeners();
   }
 
   // 3. Tìm người dùng theo Email
   Future<Map<String, dynamic>?> searchUser(String email, {BuildContext? context}) async {
     String currentUserId = await AuthController().getCurrentUserId();
+    if (_isDisposed) return null;
+
     try {
       final response = await http.get(Uri.parse('$_baseUrl/search?email=$email&currentUserId=$currentUserId'));
       if (response.statusCode == 200) return jsonDecode(response.body);
@@ -143,13 +170,15 @@ class ContactsController extends ChangeNotifier {
         'bio': result['bio'] ?? 'Chưa có thông tin',
         'relationStatus': result['relationStatus'] ?? 'none', 'isFriend': result['isFriend'] ?? false
       };
-      notifyListeners();
+      _safeNotifyListeners();
     }
   }
 
   // 5. Thêm / Hủy kết bạn
   Future<String> toggleFriendStatus(String friendId) async {
     String currentUserId = await AuthController().getCurrentUserId();
+    if (_isDisposed) return "none";
+
     try {
       final response = await http.post(
         Uri.parse('$_baseUrl/add'), headers: {'Content-Type': 'application/json'},
@@ -166,8 +195,10 @@ class ContactsController extends ChangeNotifier {
   Future<void> toggleFriendStatusFromPanel() async {
     if (selectedFriend == null) return;
     String newStatus = await toggleFriendStatus(selectedFriend!['id']);
+    if (_isDisposed) return;
+    
     selectedFriend!['relationStatus'] = newStatus;
     selectedFriend!['isFriend'] = (newStatus == 'friend');
-    notifyListeners();
+    _safeNotifyListeners();
   }
 }

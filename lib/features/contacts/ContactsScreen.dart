@@ -7,22 +7,29 @@ import '../chat/widgets/MainChatArea.dart';
 import '../chat/widgets/create_group_dialog.dart'; 
 
 class ContactsScreen extends StatefulWidget {
-  final Function(String userId)? onStartChat; 
+   final Function(String userId)? onStartChat;
+   final ContactsController controller;
 
-  const ContactsScreen({super.key, this.onStartChat});
+  const ContactsScreen({
+    super.key,
+    this.onStartChat,
+    required this.controller,
+  });
 
+  // 🎯 ĐÃ BỔ SUNG HÀM KẾT NỐI BỊ THIẾU
   @override
   State<ContactsScreen> createState() => _ContactsScreenState();
 }
 
 class _ContactsScreenState extends State<ContactsScreen> {
-  final ContactsController _controller = ContactsController();
+  late final ContactsController _controller;
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchCtrl = TextEditingController();
 
   @override
   void initState() {
     super.initState();
+    _controller = widget.controller;
     _controller.loadFriends();
     _controller.loadGroups();
   }
@@ -31,7 +38,6 @@ class _ContactsScreenState extends State<ContactsScreen> {
   void dispose() {
     _scrollController.dispose();
     _searchCtrl.dispose();
-    _controller.dispose();
     super.dispose();
   }
 

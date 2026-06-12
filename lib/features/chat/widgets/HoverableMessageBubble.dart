@@ -1,16 +1,23 @@
 // ignore_file: file_names
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; 
-import 'chat_message.dart'; // 🎯 Đã sửa lại đường dẫn import cho đúng thư mục hiện tại
+import 'chat_message.dart'; 
 
 class HoverableMessageBubble extends StatefulWidget {
   final ChatMessage message;
+  final VoidCallback onRevoke;       // 🎯 Thêm callback thu hồi
+  final VoidCallback onDeleteForMe;  // 🎯 Thêm callback xóa cục bộ
+  final bool canRevoke;              // 🎯 Biến check thời gian vàng 5 phút từ cha truyền xuống
   final Function(ChatMessage)? onReply;
   final Function(String)? onReact;
 
   const HoverableMessageBubble({
     super.key, 
     required this.message,
+    required this.onRevoke,
+    required this.onDeleteForMe,
+    required this.canRevoke,
     this.onReply,
     this.onReact,
   });
@@ -35,6 +42,9 @@ class _HoverableMessageBubbleState extends State<HoverableMessageBubble> {
   }
 
   void _showContextMenu(BuildContext context) async {
+    // Nếu tin nhắn đã thu hồi rồi thì không cho bật menu thao tác nữa
+    if (widget.message.type == 'revoked') return;
+
     final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
     final textColor = Theme.of(context).colorScheme.onSurface;
 
@@ -67,7 +77,12 @@ class _HoverableMessageBubbleState extends State<HoverableMessageBubble> {
         PopupMenuItem<String>(value: 'reply', child: _buildMenuItem(Icons.reply_rounded, 'Trả lời', textColor)),
         PopupMenuItem<String>(value: 'copy', child: _buildMenuItem(Icons.copy_rounded, 'Sao chép', textColor)),
         const PopupMenuDivider(),
-        PopupMenuItem<String>(value: 'delete', child: _buildMenuItem(Icons.delete_outline_rounded, 'Thu hồi', Colors.redAccent)),
+        
+        // 🎯 THIẾT KẾ ĐIỀU KIỆN RẼ NHÁNH BẢO MẬT THEO ĐÚNG YÊU CẦU CỦA ÔNG
+        if (widget.canRevoke)
+          PopupMenuItem<String>(value: 'revoke', child: _buildMenuItem(Icons.undo_rounded, 'Thu hồi', Colors.orangeAccent))
+        else
+          PopupMenuItem<String>(value: 'delete_for_me', child: _buildMenuItem(Icons.delete_outline_rounded, 'Xóa ở phía tôi', Colors.redAccent)),
       ],
     );
 
@@ -80,6 +95,10 @@ class _HoverableMessageBubbleState extends State<HoverableMessageBubble> {
           const SnackBar(content: Text('Đã sao chép tin nhắn'), duration: Duration(seconds: 1)),
         );
       }
+    } else if (result == 'revoke') {
+      widget.onRevoke(); // Kích hoạt lệnh thu hồi trên máy chủ & cả 2 bên máy
+    } else if (result == 'delete_for_me') {
+      widget.onDeleteForMe(); // Kích hoạt giấu tin nhắn cục bộ phía mình
     }
   }
 
@@ -90,6 +109,8 @@ class _HoverableMessageBubbleState extends State<HoverableMessageBubble> {
   @override
   Widget build(BuildContext context) {
     final isMe = widget.message.isMe;
+    final isRevoked = widget.message.type == 'revoked'; // Check cờ thu hồi
+    
     final primaryColor = Theme.of(context).colorScheme.primary;
     final surfaceColor = Theme.of(context).colorScheme.surface;
     final textColor = Theme.of(context).colorScheme.onSurface;
@@ -107,8 +128,8 @@ class _HoverableMessageBubbleState extends State<HoverableMessageBubble> {
         crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
           
-          // 🎯 1. KHỐI HIỂN THỊ TIN NHẮN BỊ TRẢ LỜI (Nằm phía trên)
-          if (widget.message.replyToText != null)
+          // 1. KHỐI HIỂN THỊ TIN NHẮN BỊ TRẢ LỜI (Ẩn đi nếu tin nhắn chính đã bị thu hồi)
+          if (widget.message.replyToText != null && !isRevoked)
             Container(
               margin: EdgeInsets.only(bottom: 4, left: isMe ? 40 : 12, right: isMe ? 12 : 40),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -125,7 +146,7 @@ class _HoverableMessageBubbleState extends State<HoverableMessageBubble> {
               ),
             ),
 
-          // 🎯 2. KHỐI TIN NHẮN CHÍNH
+          // 2. KHỐI TIN NHẮN CHÍNH
           MouseRegion(
             onEnter: (_) => setState(() => _isHovered = true),
             onExit: (_) => setState(() => _isHovered = false),
@@ -133,15 +154,18 @@ class _HoverableMessageBubbleState extends State<HoverableMessageBubble> {
               mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                if (isMe && _isHovered) _buildActionIcons(textColor),
+                if (isMe && _isHovered && !isRevoked) _buildActionIcons(textColor),
                 Flexible(
                   child: Container(
                     margin: EdgeInsets.only(left: isMe ? 8 : 0, right: isMe ? 0 : 8),
                     constraints: const BoxConstraints(maxWidth: 400),
                     decoration: BoxDecoration(
-                      color: widget.message.type == 'image' ? Colors.transparent : (isMe ? primaryColor : surfaceColor),
+                      // Nếu bị thu hồi thì cho hình nền xám trong suốt, nếu không giữ nguyên màu cũ của ông
+                      color: isRevoked 
+                          ? textColor.withValues(alpha: 0.05) 
+                          : (widget.message.type == 'image' ? Colors.transparent : (isMe ? primaryColor : surfaceColor)),
                       borderRadius: borderRadius,
-                      boxShadow: widget.message.type == 'image' ? [] : [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
+                      boxShadow: (widget.message.type == 'image' || isRevoked) ? [] : [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
                     ),
                     child: Material(
                       color: Colors.transparent,
@@ -152,16 +176,33 @@ class _HoverableMessageBubbleState extends State<HoverableMessageBubble> {
                         highlightColor: textColor.withValues(alpha: 0.1),
                         onTapDown: _storePosition, 
                         onSecondaryTapDown: _storePosition, 
-                        onTap: _toggleDetails, 
+                        onTap: isRevoked ? null : _toggleDetails, // Khóa tap xem chi tiết nếu đã thu hồi
                         onSecondaryTap: () => _showContextMenu(context), 
                         onLongPress: () => _showContextMenu(context), 
                         child: Padding(
-                          padding: widget.message.type == 'image' ? const EdgeInsets.all(4) : const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          padding: (widget.message.type == 'image' && !isRevoked) ? const EdgeInsets.all(4) : const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                           child: Column(
                             crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                             children: [
-                              // Text hoặc Ảnh
-                              if (widget.message.type == 'image')
+                              // 🎯 GIAO DIỆN HIỂN THỊ KHI TIN NHẮN BỊ THU HỒI
+                              if (isRevoked)
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.block_flipped, size: 14, color: textColor.withValues(alpha: 0.35)),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      'Tin nhắn đã được thu hồi',
+                                      style: TextStyle(
+                                        fontStyle: FontStyle.italic,
+                                        color: textColor.withValues(alpha: 0.35),
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              // Nếu trạng thái bình thường: Render Text hoặc Ảnh của ông
+                              else if (widget.message.type == 'image')
                                 ClipRRect(
                                   borderRadius: BorderRadius.circular(14), 
                                   child: Image.network(
@@ -183,7 +224,7 @@ class _HoverableMessageBubbleState extends State<HoverableMessageBubble> {
                                         children: [Icon(Icons.broken_image_rounded, color: Colors.redAccent), SizedBox(height: 8), Text('Lỗi ảnh', style: TextStyle(color: Colors.redAccent))],
                                       ),
                                     ),
-                                  )
+                                  ),
                                 )
                               else
                                 Text(
@@ -196,13 +237,12 @@ class _HoverableMessageBubbleState extends State<HoverableMessageBubble> {
                                   )
                                 ),
                               
-                              // 🎯 3. KHỐI HIỂN THỊ CẢM XÚC (REACTIONS) DƯỚI ĐÍT TEXT
-                              if (widget.message.reactions.isNotEmpty)
+                              // 3. KHỐI HIỂN THỊ CẢM XÚC (REACTIONS)
+                              if (widget.message.reactions.isNotEmpty && !isRevoked)
                                 Padding(
                                   padding: const EdgeInsets.only(top: 8.0),
                                   child: Wrap(
-                                    spacing: 6,
-                                    runSpacing: 4,
+                                    spacing: 6, runSpacing: 4,
                                     children: widget.message.reactions.entries.map((e) {
                                       return Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -229,7 +269,7 @@ class _HoverableMessageBubbleState extends State<HoverableMessageBubble> {
                     ),
                   ),
                 ),
-                if (!isMe && _isHovered) _buildActionIcons(textColor),
+                if (!isMe && _isHovered && !isRevoked) _buildActionIcons(textColor),
               ],
             ),
           ),
@@ -238,7 +278,7 @@ class _HoverableMessageBubbleState extends State<HoverableMessageBubble> {
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOutCubic,
             alignment: isMe ? Alignment.topRight : Alignment.topLeft, 
-            child: _showDetails 
+            child: (_showDetails && !isRevoked) 
               ? Padding(
                   padding: EdgeInsets.only(top: 4, left: isMe ? 0 : 8, right: isMe ? 8 : 0, bottom: 4),
                   child: _buildMessageStatusDetails(textColor, primaryColor),
