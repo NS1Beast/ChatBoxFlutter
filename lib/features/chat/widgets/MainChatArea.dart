@@ -10,11 +10,14 @@ import 'chat_message.dart';
 import 'HoverableMessageBubble.dart';
 import 'ChatInputArea.dart'; 
 import '../../contacts/ContactsController.dart'; 
+import '../widgets/add_member_dialog.dart';
 import '../../auth/AuthController.dart';
 import '../../../core/services/signalr_service.dart'; 
+import '../../../core/services/local_db_service.dart'; 
+import '../../../core/services/group_api_service.dart'; 
 
 class MainChatArea extends StatefulWidget {
-  final String chatId;
+  final String chatId; // Đối với nhóm, đây là conversationId
   final String chatName;
   final String chatAvatar;
   final String chatCover;
@@ -22,6 +25,7 @@ class MainChatArea extends StatefulWidget {
   final String relationStatus; 
   final bool autoStartVoiceCall;
   final bool autoStartVideoCall;
+  final bool isGroup; 
 
   const MainChatArea({
     super.key, 
@@ -33,6 +37,7 @@ class MainChatArea extends StatefulWidget {
     this.relationStatus = 'friend',
     this.autoStartVoiceCall = false,
     this.autoStartVideoCall = false,
+    this.isGroup = false, 
   });
 
   @override
@@ -52,12 +57,21 @@ class _MainChatAreaState extends State<MainChatArea> {
   bool _isInitializing = false;
 
   ChatMessage? _replyingToMessage;
+  bool _isOnline = false;
+
+  List<dynamic> _groupMembers = [];
+  String _myRole = 'member';
 
   @override
   void initState() {
     super.initState();
     _cachedAvatar = _getSmartAvatar(widget.chatAvatar, widget.chatId);
     _initializeChat();
+    
+    if (!widget.isGroup) {
+      _checkInitialOnlineStatus();
+      _signalR.userStatusSignal.addListener(_onUserStatusChanged);
+    }
     _signalR.incomingMessage.addListener(_onNewMessageReceived);
   }
 
@@ -67,6 +81,12 @@ class _MainChatAreaState extends State<MainChatArea> {
     if (oldWidget.chatId != widget.chatId) {
       _cachedAvatar = _getSmartAvatar(widget.chatAvatar, widget.chatId);
       _replyingToMessage = null; 
+      
+      if (!widget.isGroup) {
+        _isOnline = false;
+        _checkInitialOnlineStatus();
+      }
+      
       _initializeChat();
     } else if (oldWidget.chatAvatar != widget.chatAvatar) {
       _cachedAvatar = _getSmartAvatar(widget.chatAvatar, widget.chatId);
@@ -78,9 +98,26 @@ class _MainChatAreaState extends State<MainChatArea> {
     _scrollController.dispose();
     _contactController.dispose(); 
     _signalR.incomingMessage.removeListener(_onNewMessageReceived);
+    if (!widget.isGroup) {
+      _signalR.userStatusSignal.removeListener(_onUserStatusChanged);
+    }
     super.dispose();
   }
   
+  Future<void> _checkInitialOnlineStatus() async {
+    final online = await _signalR.checkUserOnline(widget.chatId);
+    if (mounted) setState(() => _isOnline = online);
+  }
+
+  void _onUserStatusChanged() {
+    final status = _signalR.userStatusSignal.value;
+    if (status == null) return;
+
+    if (status['userId'].toString().toLowerCase() == widget.chatId.toLowerCase()) {
+      if (mounted) setState(() => _isOnline = status['isOnline']);
+    }
+  }
+
   Future<void> _getCurrentUser() async {
     _currentUserId = await AuthController().getCurrentUserId();
   }
@@ -97,6 +134,30 @@ class _MainChatAreaState extends State<MainChatArea> {
     }
   }
 
+  Future<void> _fetchGroupMembers() async {
+    if (!widget.isGroup || _currentConversationId == null) return;
+    try {
+      final token = await const FlutterSecureStorage().read(key: 'jwt_token');
+      final res = await http.get(
+        Uri.parse('http://localhost:5034/api/Conversations/$_currentConversationId/members'),
+        headers: { 'Authorization': 'Bearer $token' },
+      );
+      if (res.statusCode == 200) {
+        final members = jsonDecode(res.body) as List<dynamic>;
+        if (mounted) {
+          setState(() {
+            _groupMembers = members;
+            final me = members.firstWhere(
+              (m) => m['userId'].toString().toLowerCase() == _currentUserId.toLowerCase(), 
+              orElse: () => null
+            );
+            if (me != null) _myRole = me['role'] ?? 'member';
+          });
+        }
+      }
+    } catch (e) { debugPrint("Lỗi tải thành viên nhóm: $e"); }
+  }
+
   Future<void> _initializeChat() async {
     if (_isInitializing) return;
     _isInitializing = true;
@@ -108,70 +169,96 @@ class _MainChatAreaState extends State<MainChatArea> {
       const storage = FlutterSecureStorage();
       String? token = await storage.read(key: 'jwt_token');
 
-      final response = await http.post(
-        Uri.parse('http://localhost:5034/api/Conversations/get-or-create'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({'friendId': widget.chatId}),
-      );
+      if (widget.isGroup) {
+        _currentConversationId = widget.chatId;
+      } else {
+        final response = await http.post(
+          Uri.parse('http://localhost:5034/api/Conversations/get-or-create'),
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer $token' },
+          body: jsonEncode({'friendId': widget.chatId}),
+        );
+        if (response.statusCode != 200) return;
+        final data = jsonDecode(response.body);
+        _currentConversationId = data['conversationId']?.toString();
+      }
 
-      if (response.statusCode != 200) return;
+      if (_currentConversationId == null || _currentConversationId!.isEmpty) return;
 
-      final data = jsonDecode(response.body);
-      final conversationId = data['conversationId']?.toString();
-      if (conversationId == null || conversationId.isEmpty) return;
-
-      _currentConversationId = conversationId;
       await _signalR.joinConversation(_currentConversationId!);
       
+      if (widget.isGroup) await _fetchGroupMembers();
+
+      final localDb = LocalDbService();
+      final localMsgs = await localDb.getMessages(_currentConversationId!);
+      
+      if (localMsgs.isNotEmpty && mounted && initializingChatId == widget.chatId) {
+        setState(() {
+          messages = localMsgs.map((m) {
+            final isMyMessage = m['senderId'].toString().toLowerCase() == _currentUserId.toLowerCase();
+            return ChatMessage(
+              text: m['content'] ?? '',
+              type: m['type'] ?? 'text',
+              isMe: isMyMessage,
+              time: _formatTime(m['createdAt']), 
+              replyToText: m['replyToText'], 
+            );
+          }).toList();
+        });
+        _scrollToBottom();
+      }
+
+      String? lastTime = await localDb.getLastMessageTime(_currentConversationId!);
+      String apiUrl = 'http://localhost:5034/api/Conversations/$_currentConversationId/messages';
+      
+      if (lastTime != null) {
+        apiUrl += '?since=${Uri.encodeComponent(lastTime)}';
+      }
+
       final historyRes = await http.get(
-        Uri.parse('http://localhost:5034/api/Conversations/$_currentConversationId/messages'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
+        Uri.parse(apiUrl),
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer $token' },
       );
 
       if (!mounted || initializingChatId != widget.chatId) return;
 
       if (historyRes.statusCode == 200) {
-        final List<dynamic> historyData = jsonDecode(historyRes.body);
+        final List<dynamic> newServerData = jsonDecode(historyRes.body);
 
-        final loadedMessages = historyData.where((m) {
-          final type = (m['type'] ?? 'text').toString();
-          return !(type == 'offer_video' || type == 'offer_voice' || type == 'answer' || type == 'ice' || type == 'end' || type.startsWith('webrtc_'));
-        }).map((m) {
-          final senderId = m['senderId']?.toString().toLowerCase() ?? '';
-          final isMyMessage = senderId == _currentUserId.toLowerCase();
-          final timeString = m['createdAt'] ?? m['CreatedAt'];
+        if (newServerData.isNotEmpty) {
+          final validMessages = newServerData.where((m) {
+            final type = (m['type'] ?? 'text').toString();
+            return !(type == 'offer_video' || type == 'offer_voice' || type == 'answer' || type == 'ice' || type == 'end' || type.startsWith('webrtc_'));
+          }).toList();
 
-          // 🎯 ĐÃ NÂNG CẤP: Lôi cục Metadata từ dưới DB lên để giải mã
-          String? historyReplyText;
-          final metaRaw = m['metadata'] ?? m['Metadata']; // Vì API hay trả về chữ M hoa
-          if (metaRaw != null) {
-            try {
-              // Cắt đôi trường hợp: API trả về chuỗi String hoặc Map thẳng
-              final meta = metaRaw is Map ? metaRaw : jsonDecode(metaRaw.toString());
-              historyReplyText = meta['replyToText']?.toString();
-            } catch (_) {}
+          for (var m in validMessages) {
+            String? historyReplyText;
+            final metaRaw = m['metadata'] ?? m['Metadata']; 
+            if (metaRaw != null) {
+              try {
+                final meta = metaRaw is Map ? metaRaw : jsonDecode(metaRaw.toString());
+                historyReplyText = meta['replyToText']?.toString();
+              } catch (_) {}
+            }
+            await localDb.saveMessage(m, _currentConversationId!, historyReplyText);
           }
 
-          return ChatMessage(
-            text: m['content'] ?? '',
-            type: m['type'] ?? 'text',
-            isMe: isMyMessage,
-            time: _formatTime(timeString), 
-            replyToText: historyReplyText, // 🎯 Bơm vào UI
-          );
-        }).toList();
-
-        setState(() {
-          messages = loadedMessages;
-        });
-
-        _scrollToBottom();
+          final updatedLocalMsgs = await localDb.getMessages(_currentConversationId!);
+          if (mounted && initializingChatId == widget.chatId) {
+            setState(() {
+              messages = updatedLocalMsgs.map((m) {
+                final isMyMessage = m['senderId'].toString().toLowerCase() == _currentUserId.toLowerCase();
+                return ChatMessage(
+                  text: m['content'] ?? '',
+                  type: m['type'] ?? 'text',
+                  isMe: isMyMessage,
+                  time: _formatTime(m['createdAt']), 
+                  replyToText: m['replyToText'], 
+                );
+              }).toList();
+            });
+            _scrollToBottom();
+          }
+        }
 
         if (widget.autoStartVoiceCall) {
           _openCallScreen(isVideo: false);
@@ -186,7 +273,7 @@ class _MainChatAreaState extends State<MainChatArea> {
     }
   }
 
-  void _onNewMessageReceived() {
+  void _onNewMessageReceived() async {
     final msg = _signalR.incomingMessage.value;
     if (msg == null) return;
 
@@ -202,7 +289,6 @@ class _MainChatAreaState extends State<MainChatArea> {
 
     if (type == 'offer_video' || type == 'offer_voice' || type == 'answer' || type == 'ice' || type == 'end' || type.startsWith('webrtc_')) return;
 
-    // 🎯 ĐÃ NÂNG CẤP: Rã đông Metadata khi tin nhắn bay tới thời gian thực
     String? incomingReplyText;
     final metaRaw = msg['metadata'] ?? msg['Metadata'];
     if (metaRaw != null && metaRaw.toString().isNotEmpty) {
@@ -211,6 +297,8 @@ class _MainChatAreaState extends State<MainChatArea> {
         incomingReplyText = meta['replyToText']?.toString();
       } catch (_) {}
     }
+
+    await LocalDbService().saveMessage(msg, _currentConversationId!, incomingReplyText);
 
     if (mounted) {
       setState(() {
@@ -225,7 +313,7 @@ class _MainChatAreaState extends State<MainChatArea> {
           type: type,
           isMe: isMyMessage, 
           time: _formatTime(timeString),
-          replyToText: incomingReplyText, // 🎯 Bơm vào UI cho thằng nhận
+          replyToText: incomingReplyText, 
         ));
       });
     }
@@ -239,17 +327,13 @@ class _MainChatAreaState extends State<MainChatArea> {
     }
 
     String? repliedText = _replyingToMessage?.text;
-
-    // 🎯 ĐÃ NÂNG CẤP: Nén cục chữ được Reply vào JSON để ném lên C#
     String? metadataJsonString;
     if (repliedText != null) {
       metadataJsonString = jsonEncode({'replyToText': repliedText});
     }
 
     if (_replyingToMessage != null) {
-      setState(() {
-        _replyingToMessage = null; // Ẩn thanh Preview đi
-      });
+      setState(() { _replyingToMessage = null; });
     }
 
     setState(() {
@@ -258,13 +342,12 @@ class _MainChatAreaState extends State<MainChatArea> {
         type: type,
         isMe: true, 
         time: 'Đang gửi...', 
-        replyToText: repliedText, // Hiện ngay trên UI mình cho đỡ lag
+        replyToText: repliedText, 
       ));
     });
     _scrollToBottom();
 
     try {
-      // 🎯 ĐÃ NÂNG CẤP: Bắn cả chuỗi Metadata lên mây
       await _signalR.sendMessage(_currentConversationId!, text, type, metadata: metadataJsonString); 
     } catch (e) {
       if (mounted) {
@@ -307,10 +390,11 @@ class _MainChatAreaState extends State<MainChatArea> {
         return NetworkImage(avatarUrl);
       }
     }
-    return NetworkImage('https://i.pravatar.cc/150?u=$userId');
+    return NetworkImage(widget.isGroup ? 'https://ui-avatars.com/api/?name=${widget.chatName}&background=random' : 'https://i.pravatar.cc/150?u=$userId');
   }
 
   void _openUserProfile() {
+    if (widget.isGroup) return; 
     Navigator.push(context, MaterialPageRoute(builder: (context) => FriendProfileScreen(
       userId: widget.chatId, userName: widget.chatName, avatarUrl: widget.chatAvatar, coverImageUrl: widget.chatCover, bio: widget.chatBio, initialRelationStatus: widget.relationStatus, contactController: _contactController, 
     )));
@@ -351,9 +435,7 @@ class _MainChatAreaState extends State<MainChatArea> {
                                 key: ValueKey('${message.text}_${message.time}_$index'),
                                 message: message,
                                 onReply: (msg) {
-                                  setState(() {
-                                    _replyingToMessage = msg;
-                                  });
+                                  setState(() { _replyingToMessage = msg; });
                                 },
                                 onReact: (emoji) {
                                   setState(() {
@@ -374,10 +456,7 @@ class _MainChatAreaState extends State<MainChatArea> {
                 if (_replyingToMessage != null)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: surfaceColor,
-                      border: Border(top: BorderSide(color: Colors.grey.withValues(alpha: 0.2))),
-                    ),
+                    decoration: BoxDecoration(color: surfaceColor, border: Border(top: BorderSide(color: Colors.grey.withValues(alpha: 0.2)))),
                     child: Row(
                       children: [
                         Icon(Icons.reply_rounded, color: primaryColor, size: 20),
@@ -391,21 +470,14 @@ class _MainChatAreaState extends State<MainChatArea> {
                                 style: TextStyle(color: primaryColor, fontSize: 12, fontWeight: FontWeight.bold),
                               ),
                               const SizedBox(height: 2),
-                              Text(
-                                _replyingToMessage!.text,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(color: textColor.withValues(alpha: 0.7), fontSize: 13),
-                              ),
+                              Text(_replyingToMessage!.text, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: textColor.withValues(alpha: 0.7), fontSize: 13)),
                             ],
                           ),
                         ),
                         IconButton(
                           icon: const Icon(Icons.close_rounded, size: 20),
                           onPressed: () => setState(() => _replyingToMessage = null),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                          color: textColor.withValues(alpha: 0.5),
+                          padding: EdgeInsets.zero, constraints: const BoxConstraints(), color: textColor.withValues(alpha: 0.5),
                         ),
                       ],
                     ),
@@ -448,9 +520,48 @@ class _MainChatAreaState extends State<MainChatArea> {
       decoration: BoxDecoration(color: surfaceColor, border: Border(bottom: BorderSide(color: Colors.grey.withValues(alpha: 0.2)))),
       child: Row(
         children: [
-          MouseRegion(cursor: SystemMouseCursors.click, child: GestureDetector(onTap: _openUserProfile, child: Stack(children: [CircleAvatar(radius: 22, backgroundImage: _cachedAvatar), Positioned(right: 0, bottom: 0, child: Container(width: 12, height: 12, decoration: BoxDecoration(color: Colors.green, shape: BoxShape.circle, border: Border.all(color: surfaceColor, width: 2))))]))),
+          MouseRegion(
+            cursor: SystemMouseCursors.click, 
+            child: GestureDetector(
+              onTap: _openUserProfile, 
+              child: Stack(
+                children: [
+                  CircleAvatar(radius: 22, backgroundImage: _cachedAvatar), 
+                  if (!widget.isGroup)
+                    Positioned(
+                      right: 0, bottom: 0, 
+                      child: Container(
+                        width: 12, height: 12, 
+                        decoration: BoxDecoration(
+                          color: _isOnline ? Colors.green : Colors.grey.shade400, 
+                          shape: BoxShape.circle, 
+                          border: Border.all(color: surfaceColor, width: 2)
+                        )
+                      )
+                    )
+                ]
+              )
+            )
+          ),
           const SizedBox(width: 16),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [MouseRegion(cursor: SystemMouseCursors.click, child: GestureDetector(onTap: _openUserProfile, child: Text(widget.chatName, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)))), Text('Đang hoạt động', style: TextStyle(fontSize: 13, color: primaryColor))])),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start, 
+              children: [
+                MouseRegion(
+                  cursor: SystemMouseCursors.click, 
+                  child: GestureDetector(
+                    onTap: _openUserProfile, 
+                    child: Text(widget.chatName, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor))
+                  )
+                ), 
+                if (widget.isGroup)
+                  Text('${_groupMembers.length} thành viên', style: TextStyle(fontSize: 13, color: textColor.withValues(alpha: 0.5)))
+                else
+                  Text(_isOnline ? 'Đang hoạt động' : 'Ngoại tuyến', style: TextStyle(fontSize: 13, color: _isOnline ? primaryColor : Colors.grey))
+              ]
+            )
+          ),
           IconButton(icon: Icon(Icons.call_outlined, color: primaryColor), onPressed: () => _openCallScreen(isVideo: false)),
           IconButton(icon: Icon(Icons.videocam_outlined, color: primaryColor), onPressed: () => _openCallScreen(isVideo: true)),
           IconButton(icon: Icon(_showInfoPanel ? Icons.info_rounded : Icons.info_outline, color: _showInfoPanel ? primaryColor : textColor.withValues(alpha: 0.6)), onPressed: () => setState(() => _showInfoPanel = !_showInfoPanel)),
@@ -464,12 +575,87 @@ class _MainChatAreaState extends State<MainChatArea> {
   }
 
   Widget _buildRightInfoPanel(Color textColor, Color primaryColor) {
+    if (widget.isGroup) {
+      return SingleChildScrollView(
+        child: Column(
+          children: [
+            const SizedBox(height: 32), CircleAvatar(radius: 48, backgroundImage: _cachedAvatar), const SizedBox(height: 16),
+            Text(widget.chatName, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textColor)),
+            Text('${_groupMembers.length} thành viên', style: TextStyle(color: textColor.withValues(alpha: 0.5))),
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center, 
+              children: [
+                // 🎯 ĐÃ GẮN POPUP VÀO NÚT THÊM BẠN
+                _buildInfoActionBtn(Icons.group_add_rounded, 'Thêm bạn', textColor, onTap: () async {
+                  final result = await showDialog(
+                    context: context,
+                    builder: (_) => AddMemberDialog(
+                      controller: _contactController, 
+                      conversationId: _currentConversationId!
+                    ),
+                  );
+                  if (result == true) {
+                    await _fetchGroupMembers(); 
+                  }
+                }), 
+                const SizedBox(width: 24), 
+                _buildInfoActionBtn(Icons.notifications_off_outlined, 'Tắt âm', textColor),
+              ]
+            ),
+            const SizedBox(height: 24), Divider(height: 1, color: Colors.grey.withValues(alpha: 0.2)),
+            
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+              child: Align(alignment: Alignment.centerLeft, child: Text('Thành viên nhóm', style: TextStyle(fontWeight: FontWeight.bold))),
+            ),
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _groupMembers.length,
+              itemBuilder: (context, index) {
+                final member = _groupMembers[index];
+                final isMe = member['userId'].toString().toLowerCase() == _currentUserId.toLowerCase();
+                final isAdmin = member['role'] == 'admin';
+
+                return ListTile(
+                  leading: CircleAvatar(backgroundImage: _getSmartAvatar(member['avatarUrl'], member['userId'])),
+                  title: Text(isMe ? 'Bạn' : member['fullName']),
+                  subtitle: isAdmin ? const Text('Trưởng nhóm', style: TextStyle(color: Colors.green, fontSize: 12)) : null,
+                  trailing: (_myRole == 'admin' && !isMe) 
+                    ? IconButton(
+                        icon: const Icon(Icons.person_remove_rounded, color: Colors.red, size: 20),
+                        tooltip: 'Mời khỏi nhóm',
+                        onPressed: () async {
+                          try {
+                            await GroupApiService().kickMember(_currentConversationId!, member['userId']);
+                            await _fetchGroupMembers(); 
+                            if(context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã mời thành viên ra khỏi nhóm')));
+                            }
+                          } catch (e) {
+                            if(context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+                          }
+                        },
+                      ) 
+                    : null,
+                );
+              }
+            )
+          ],
+        ),
+      );
+    }
+
     return SingleChildScrollView(
       child: Column(
         children: [
           const SizedBox(height: 32), CircleAvatar(radius: 48, backgroundImage: _cachedAvatar), const SizedBox(height: 16),
           Text(widget.chatName, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textColor)),
-          Text('Trực tuyến', style: TextStyle(fontSize: 14, color: textColor.withValues(alpha: 0.5))),
+          Text(
+            _isOnline ? 'Đang hoạt động' : 'Ngoại tuyến', 
+            style: TextStyle(fontSize: 14, color: _isOnline ? primaryColor : textColor.withValues(alpha: 0.5))
+          ),
           const SizedBox(height: 24),
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [_buildInfoActionBtn(Icons.person_outline, 'Hồ sơ', textColor, onTap: _openUserProfile), const SizedBox(width: 24), _buildInfoActionBtn(Icons.notifications_off_outlined, 'Tắt âm', textColor), const SizedBox(width: 24), _buildInfoActionBtn(Icons.search_rounded, 'Tìm kiếm', textColor)]),
           const SizedBox(height: 24), Divider(height: 1, color: Colors.grey.withValues(alpha: 0.2)),

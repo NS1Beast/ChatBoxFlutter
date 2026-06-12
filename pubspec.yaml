@@ -47,6 +47,9 @@ dependencies:
   image_cropper: ^12.2.1
   signalr_netcore: ^1.4.4
   flutter_webrtc: ^1.4.1
+  sqflite_sqlcipher: ^3.4.0
+  path: ^1.9.1
+  sqflite_common_ffi: ^2.4.0+3
   
 
 dev_dependencies:

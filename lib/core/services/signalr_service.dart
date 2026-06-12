@@ -20,11 +20,14 @@ class SignalRService {
   final ValueNotifier<Map<String, dynamic>?> webRTCSignal =
       ValueNotifier<Map<String, dynamic>?>(null);
 
+  // 🎯 THÊM: KÊNH PHÁT SÓNG TRẠNG THÁI ONLINE/OFFLINE
+  final ValueNotifier<Map<String, dynamic>?> userStatusSignal = 
+      ValueNotifier<Map<String, dynamic>?>(null);
+
   final Set<String> _joinedConversations = <String>{};
 
   Future<void>? _startFuture;
 
-  // Queue riêng cho WebRTC signal để không spam HubConnection.invoke song song.
   Future<void> _callSignalQueue = Future<void>.value();
 
   static const String baseUrl = 'http://localhost:5034';
@@ -80,6 +83,27 @@ class SignalRService {
       _hubConnection?.on('ReceiveMessage', _handleIncomingMessage);
       _hubConnection?.on('ReceiveWebRTCSignal', _handleWebRTCSignal);
 
+      // 🎯 THÊM: BẮT SỰ KIỆN TỪ SERVER BÁO CÓ NGƯỜI ONLINE/OFFLINE
+      _hubConnection?.on('UserOnline', (args) {
+        if (args != null && args.isNotEmpty) {
+          userStatusSignal.value = {
+            'userId': args[0].toString(),
+            'isOnline': true,
+            'timestamp': DateTime.now().millisecondsSinceEpoch
+          };
+        }
+      });
+
+      _hubConnection?.on('UserOffline', (args) {
+        if (args != null && args.isNotEmpty) {
+          userStatusSignal.value = {
+            'userId': args[0].toString(),
+            'isOnline': false,
+            'timestamp': DateTime.now().millisecondsSinceEpoch
+          };
+        }
+      });
+
       _hubConnection?.onclose(({error}) {
         debugPrint('🛑 SignalR đóng kết nối: $error');
       });
@@ -115,6 +139,17 @@ class SignalRService {
       debugPrint('🛑 SignalR đã ngắt kết nối hoàn toàn!');
     } catch (e) {
       debugPrint('❌ Lỗi stop SignalR: $e');
+    }
+  }
+
+  // 🎯 THÊM: HÀM CHO FLUTTER HỎI THĂM TRẠNG THÁI (LÚC MỚI VÀO PHÒNG)
+  Future<bool> checkUserOnline(String userId) async {
+    if (!isConnected) await startConnection();
+    try {
+      final result = await _hubConnection?.invoke('IsUserOnline', args: [userId]);
+      return result == true;
+    } catch (e) {
+      return false;
     }
   }
 
@@ -161,8 +196,6 @@ class SignalRService {
   ) async {
     final normalizedConversationId = _normalizeConversationId(conversationId);
 
-    // ICE bắn rất nhanh, bắt buộc queue tuần tự.
-    // Offer/answer/end cũng cho đi qua cùng queue để giữ đúng thứ tự.
     _callSignalQueue = _callSignalQueue
         .catchError((_) {})
         .then((_) => _sendCallSignalNow(
@@ -189,8 +222,6 @@ class SignalRService {
         return;
       }
 
-      // Không join lại liên tục cho từng ICE.
-      // Chỉ join nếu conversation chưa có trong cache.
       if (!_joinedConversations.contains(normalizedConversationId)) {
         await joinConversation(normalizedConversationId);
       }

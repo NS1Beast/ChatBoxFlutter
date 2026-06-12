@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using System.Security.Claims;
 using System.Text.Json; // 🎯 Cần thiết cho JsonDocument
+using System.Collections.Concurrent; // 🎯 Cần thiết cho Sổ điểm danh đa luồng
 using ChatApp.Api.Models;
 using ChatApp.Api.Services;
 
@@ -17,6 +18,13 @@ namespace ChatApp.Api.Hubs
         private readonly IMemoryCache _cache;
         private readonly MessageQueue _queue;
 
+        // 🎯 SỔ ĐIỂM DANH: Lưu userId và danh sách connectionId đang online của user đó
+        private static readonly ConcurrentDictionary<string, HashSet<string>> _onlineUsers =
+            new(StringComparer.OrdinalIgnoreCase);
+
+        // 🎯 Khóa để tránh lỗi đa luồng khi thêm/xóa connectionId trong HashSet
+        private static readonly object _onlineUsersLock = new();
+
         public ChatHub(ChatDbContext db, EncryptionService crypto, IMemoryCache cache, MessageQueue queue)
         {
             _db = db;
@@ -24,6 +32,95 @@ namespace ChatApp.Api.Hubs
             _cache = cache;
             _queue = queue;
         }
+
+        // ==========================================
+        // 🎯 LOGIC ONLINE / OFFLINE BẮT ĐẦU Ở ĐÂY
+        // ==========================================
+
+        public override async Task OnConnectedAsync()
+        {
+            var userId = Context.UserIdentifier;
+
+            if (!string.IsNullOrWhiteSpace(userId))
+            {
+                bool isFirstConnection = false;
+
+                lock (_onlineUsersLock)
+                {
+                    if (!_onlineUsers.TryGetValue(userId, out var connections))
+                    {
+                        connections = new HashSet<string>();
+                        _onlineUsers[userId] = connections;
+                    }
+
+                    // Nếu trước đó user chưa có connection nào thì đây là lần online đầu tiên
+                    isFirstConnection = connections.Count == 0;
+
+                    connections.Add(Context.ConnectionId);
+                }
+
+                Console.WriteLine($"🟢 User online: {userId} | ConnectionId: {Context.ConnectionId}");
+
+                if (isFirstConnection)
+                {
+                    // Báo cho các client khác biết user này vừa online
+                    await Clients.Others.SendAsync("UserOnline", userId);
+                }
+            }
+
+            await base.OnConnectedAsync();
+        }
+
+        public override async Task OnDisconnectedAsync(Exception? exception)
+        {
+            var userId = Context.UserIdentifier;
+
+            if (!string.IsNullOrWhiteSpace(userId))
+            {
+                bool isOffline = false;
+
+                lock (_onlineUsersLock)
+                {
+                    if (_onlineUsers.TryGetValue(userId, out var connections))
+                    {
+                        connections.Remove(Context.ConnectionId);
+
+                        // Nếu không còn connection nào thì user này offline thật sự
+                        if (connections.Count == 0)
+                        {
+                            _onlineUsers.TryRemove(userId, out _);
+                            isOffline = true;
+                        }
+                    }
+                }
+
+                Console.WriteLine($"🔴 User disconnected: {userId} | ConnectionId: {Context.ConnectionId}");
+
+                if (isOffline)
+                {
+                    // Báo cho các client khác biết user này vừa offline
+                    await Clients.Others.SendAsync("UserOffline", userId);
+                }
+            }
+
+            await base.OnDisconnectedAsync(exception);
+        }
+
+        // Cổng cho Flutter hỏi thăm tình trạng lúc mới mở khung chat
+        public bool IsUserOnline(string userId)
+        {
+            if (string.IsNullOrWhiteSpace(userId)) return false;
+
+            lock (_onlineUsersLock)
+            {
+                return _onlineUsers.TryGetValue(userId, out var connections)
+                    && connections.Count > 0;
+            }
+        }
+
+        // ==========================================
+        // CÁC HÀM CÒN LẠI GIỮ NGUYÊN HOÀN TOÀN
+        // ==========================================
 
         public async Task JoinConversation(string conversationId)
         {
@@ -34,7 +131,6 @@ namespace ChatApp.Api.Hubs
             await Groups.AddToGroupAsync(Context.ConnectionId, conversationGuid.ToString());
         }
 
-        // 🎯 ĐÃ FIX: Khóa cứng 4 tham số (không dùng default parameter để tránh lú binding)
         public async Task SendMessage(string conversationId, string content, string type, string metadata)
         {
             try 
@@ -61,7 +157,6 @@ namespace ChatApp.Api.Hubs
 
                 var encrypted = _crypto.Encrypt(content);
 
-                // 🎯 Dịch chuỗi JSON an toàn
                 JsonDocument? metaDoc = null;
                 if (!string.IsNullOrWhiteSpace(metadata))
                 {
@@ -77,7 +172,7 @@ namespace ChatApp.Api.Hubs
                     Tag = encrypted.Tag,
                     KeyId = _crypto.CurrentKeyId,
                     Type = string.IsNullOrWhiteSpace(type) ? "text" : type,
-                    Metadata = metaDoc, // 🎯 Nạp vào DB
+                    Metadata = metaDoc, 
                     CreatedAt = DateTime.UtcNow,
                     IsDeleted = false
                 };
@@ -89,7 +184,7 @@ namespace ChatApp.Api.Hubs
                     senderId = currentUserId,
                     content = content,
                     type = message.Type,
-                    metadata = metadata, // 🎯 Bắn chuỗi JSON gốc về lại cho mọi người
+                    metadata = metadata, 
                     createdAt = message.CreatedAt
                 });
 
@@ -97,7 +192,6 @@ namespace ChatApp.Api.Hubs
             }
             catch (Exception ex)
             {
-                // 🎯 BẪY LỖI: Bắn thẳng lỗi nội tạng của C# về Flutter để dễ bề điều tra
                 throw new HubException($"Lỗi C# nội bộ: {ex.Message}");
             }
         }

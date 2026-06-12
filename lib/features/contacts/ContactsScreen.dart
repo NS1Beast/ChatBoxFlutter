@@ -3,7 +3,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import 'ContactsController.dart';
-import '../chat/widgets/MainChatArea.dart'; // 🎯 IMPORT THÊM ĐỂ ĐIỀU HƯỚNG
+import '../chat/widgets/MainChatArea.dart'; 
+import '../chat/widgets/create_group_dialog.dart'; 
 
 class ContactsScreen extends StatefulWidget {
   final Function(String userId)? onStartChat; 
@@ -23,6 +24,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
   void initState() {
     super.initState();
     _controller.loadFriends();
+    _controller.loadGroups();
   }
 
   @override
@@ -33,22 +35,19 @@ class _ContactsScreenState extends State<ContactsScreen> {
     super.dispose();
   }
 
-  ImageProvider _getSmartAvatar(String? avatarUrl, String userId) {
+  ImageProvider _getSmartAvatar(String? avatarUrl, String nameFallback) {
     if (avatarUrl != null && avatarUrl.isNotEmpty && avatarUrl.toLowerCase() != 'null') {
       if (avatarUrl.startsWith('data:image')) {
         final split = avatarUrl.split(',');
         if (split.length == 2) {
-          try {
-            return MemoryImage(base64Decode(split[1]));
-          } catch (e) {
-            debugPrint("Lỗi giải mã Base64: $e");
-          }
+          try { return MemoryImage(base64Decode(split[1])); } catch (e) { debugPrint("Lỗi giải mã Base64: $e"); }
         }
       } else {
         return NetworkImage(avatarUrl);
       }
     }
-    return NetworkImage('https://i.pravatar.cc/150?u=$userId');
+    // Nếu không có ảnh thì lấy chữ cái đầu làm avatar
+    return NetworkImage('https://ui-avatars.com/api/?name=$nameFallback&background=random');
   }
 
   @override
@@ -67,10 +66,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
               // CỘT TRÁI
               Container(
                 width: 320,
-                decoration: BoxDecoration(
-                  color: surfaceColor,
-                  border: Border(right: BorderSide(color: Colors.grey.withValues(alpha: 0.2))),
-                ),
+                decoration: BoxDecoration(color: surfaceColor, border: Border(right: BorderSide(color: Colors.grey.withValues(alpha: 0.2)))),
                 child: Column(
                   children: [
                     Padding(
@@ -82,7 +78,23 @@ class _ContactsScreenState extends State<ContactsScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text('Danh bạ', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: textColor)),
-                              IconButton(icon: Icon(Icons.person_add_alt_1_rounded, color: primaryColor), onPressed: () {}, tooltip: 'Thêm liên hệ')
+                              // 🎯 NÚT TẠO NHÓM NẰM Ở ĐÂY
+                              IconButton(
+                                icon: Icon(_controller.currentTab == 0 ? Icons.person_add_alt_1_rounded : Icons.group_add_rounded, color: primaryColor), 
+                                tooltip: _controller.currentTab == 0 ? 'Thêm liên hệ' : 'Tạo nhóm mới',
+                                onPressed: () async {
+                                  if (_controller.currentTab == 1) {
+                                    // 🎯 Ném cả cái controller vào, không xài danh sách validFriends nữa
+                                    final result = await showDialog(
+                                      context: context,
+                                      builder: (_) => CreateGroupDialog(controller: _controller),
+                                    );
+                                    if (result == true) {
+                                      _controller.loadGroups(); 
+                                    }
+                                  }
+                                }
+                              )
                             ],
                           ),
                           const SizedBox(height: 16),
@@ -102,7 +114,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                             onChanged: _controller.updateSearch, 
                             onSubmitted: (email) => _controller.searchGlobalUser(context, email), 
                             decoration: InputDecoration(
-                              hintText: 'Nhập Email để tìm kiếm...',
+                              hintText: 'Tìm kiếm...',
                               hintStyle: TextStyle(fontSize: 13, color: textColor.withValues(alpha: 0.5)),
                               prefixIcon: Icon(Icons.search, color: textColor.withValues(alpha: 0.5)),
                               filled: true,
@@ -120,11 +132,10 @@ class _ContactsScreenState extends State<ContactsScreen> {
                       : RawScrollbar(
                         controller: _scrollController,
                         thumbColor: textColor.withValues(alpha: 0.15),
-                        radius: const Radius.circular(8),
-                        thickness: 4,
+                        radius: const Radius.circular(8), thickness: 4,
                         child: _controller.currentTab == 0
                             ? _buildFriendsList(textColor, primaryColor)
-                            : Center(child: Text("Tính năng Nhóm đang phát triển", style: TextStyle(color: textColor.withValues(alpha: 0.5)))),
+                            : _buildGroupsList(textColor, primaryColor), // 🎯 GỌI HÀM RENDER LIST NHÓM
                       ),
                     ),
                   ],
@@ -137,7 +148,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                   color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.1),
                   child: _controller.currentTab == 0
                       ? _buildFriendDetails(textColor, primaryColor, surfaceColor)
-                      : const SizedBox.shrink(),
+                      : _buildGroupDetails(textColor, primaryColor, surfaceColor), // 🎯 GỌI HÀM RENDER INFO NHÓM
                 ),
               ),
             ],
@@ -185,14 +196,40 @@ class _ContactsScreenState extends State<ContactsScreen> {
         return Container(
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2), 
           child: ListTile(
-            selected: isSelected,
-            selectedTileColor: primaryColor.withValues(alpha: 0.1),
-            hoverColor: textColor.withValues(alpha: 0.05),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), 
-            leading: CircleAvatar(backgroundImage: _getSmartAvatar(friend['avatarUrl'], friend['id'])),
+            selected: isSelected, selectedTileColor: primaryColor.withValues(alpha: 0.1),
+            hoverColor: textColor.withValues(alpha: 0.05), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), 
+            leading: CircleAvatar(backgroundImage: _getSmartAvatar(friend['avatarUrl'], friend['name'] ?? 'Friend')),
             title: Text(friend['name'] ?? 'Bạn bè', style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: textColor)),
             subtitle: Text(friend['bio'] ?? 'Chưa có tiểu sử', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: textColor.withValues(alpha: 0.5), fontSize: 12)),
             onTap: () => _controller.selectFriend(friend),
+          ),
+        );
+      },
+    );
+  }
+
+  // 🎯 GIAO DIỆN DANH SÁCH NHÓM (CỘT TRÁI)
+  Widget _buildGroupsList(Color textColor, Color primaryColor) {
+    if (_controller.filteredGroups.isEmpty) {
+      return Center(child: Text("Bạn chưa tham gia nhóm nào.\nNhấn biểu tượng ➕ phía trên để tạo nhóm!", textAlign: TextAlign.center, style: TextStyle(color: textColor.withValues(alpha: 0.5))));
+    }
+
+    return ListView.builder(
+      controller: _scrollController,
+      itemCount: _controller.filteredGroups.length,
+      itemBuilder: (context, index) {
+        final group = _controller.filteredGroups[index];
+        final isSelected = _controller.selectedGroup?['id'] == group['id'];
+        
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2), 
+          child: ListTile(
+            selected: isSelected, selectedTileColor: primaryColor.withValues(alpha: 0.1),
+            hoverColor: textColor.withValues(alpha: 0.05), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), 
+            leading: CircleAvatar(backgroundImage: _getSmartAvatar(group['groupAvatarUrl'], group['groupName'] ?? 'G')),
+            title: Text(group['groupName'] ?? 'Nhóm', style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: textColor)),
+            subtitle: Text(group['myRole'] == 'admin' ? 'Bạn là Trưởng nhóm' : 'Thành viên', style: TextStyle(color: textColor.withValues(alpha: 0.5), fontSize: 12)),
+            onTap: () => _controller.selectGroup(group),
           ),
         );
       },
@@ -225,7 +262,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              CircleAvatar(radius: 60, backgroundImage: _getSmartAvatar(friend['avatarUrl'], friend['id'])),
+              CircleAvatar(radius: 60, backgroundImage: _getSmartAvatar(friend['avatarUrl'], friend['name'] ?? 'F')),
               const SizedBox(height: 24),
               Text(friend['name'] ?? 'Người dùng', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold, color: textColor)),
               const SizedBox(height: 8),
@@ -236,55 +273,25 @@ class _ContactsScreenState extends State<ContactsScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   _HoverableActionCard(
-                    icon: Icons.chat_bubble_rounded, 
-                    label: 'Nhắn tin', 
-                    primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor, 
+                    icon: Icons.chat_bubble_rounded, label: 'Nhắn tin', primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor, 
                     onTap: () {
                       if (widget.onStartChat != null) widget.onStartChat!(friend['id']);
                     }
                   ),
                   const SizedBox(width: 16),
-
-                  // 🎯 ĐÃ FIX: CHUYỂN HƯỚNG TỚI CHAT KÈM LỆNH GỌI THOẠI
                   _HoverableActionCard(
-                    icon: Icons.call_rounded, 
-                    label: 'Gọi thoại', 
-                    primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor, 
+                    icon: Icons.call_rounded, label: 'Gọi thoại', primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor, 
                     onTap: () {
                       if (widget.onStartChat != null) widget.onStartChat!(friend['id']);
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => MainChatArea(
-                            chatId: friend['id'],
-                            chatName: friend['name'] ?? '',
-                            chatAvatar: friend['avatarUrl'] ?? '',
-                            autoStartVoiceCall: true, // Ra lệnh gọi Voice
-                          ),
-                        ),
-                      );
+                      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => MainChatArea(chatId: friend['id'], chatName: friend['name'] ?? '', chatAvatar: friend['avatarUrl'] ?? '', autoStartVoiceCall: true)));
                     }
                   ),
                   const SizedBox(width: 16),
-
-                  // 🎯 ĐÃ FIX: CHUYỂN HƯỚNG TỚI CHAT KÈM LỆNH GỌI VIDEO
                   _HoverableActionCard(
-                    icon: Icons.videocam_rounded, 
-                    label: 'Gọi video', 
-                    primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor, 
+                    icon: Icons.videocam_rounded, label: 'Gọi video', primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor, 
                     onTap: () {
                       if (widget.onStartChat != null) widget.onStartChat!(friend['id']);
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => MainChatArea(
-                            chatId: friend['id'],
-                            chatName: friend['name'] ?? '',
-                            chatAvatar: friend['avatarUrl'] ?? '',
-                            autoStartVideoCall: true, // Ra lệnh gọi Video
-                          ),
-                        ),
-                      );
+                      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => MainChatArea(chatId: friend['id'], chatName: friend['name'] ?? '', chatAvatar: friend['avatarUrl'] ?? '', autoStartVideoCall: true)));
                     }
                   ),
                 ],
@@ -292,39 +299,30 @@ class _ContactsScreenState extends State<ContactsScreen> {
               const SizedBox(height: 24), 
 
               SizedBox(
-                width: double.infinity,
-                height: 56, 
+                width: double.infinity, height: 56, 
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 300),
                   child: relationStatus == 'friend'
                       ? OutlinedButton.icon(
-                          key: const ValueKey('unfriend'),
-                          onPressed: () async { await _controller.toggleFriendStatusFromPanel(); },
-                          icon: const Icon(Icons.person_remove_rounded, size: 22),
-                          label: const FittedBox(child: Text('Hủy kết bạn', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+                          key: const ValueKey('unfriend'), onPressed: () async { await _controller.toggleFriendStatusFromPanel(); },
+                          icon: const Icon(Icons.person_remove_rounded, size: 22), label: const FittedBox(child: Text('Hủy kết bạn', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
                           style: OutlinedButton.styleFrom(foregroundColor: Colors.redAccent, side: const BorderSide(color: Colors.redAccent), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), minimumSize: const Size.fromHeight(56)),
                         )
                       : relationStatus == 'pending'
                         ? FilledButton.icon(
-                            key: const ValueKey('pending'),
-                            onPressed: () async { await _controller.toggleFriendStatusFromPanel(); },
-                            icon: const Icon(Icons.access_time_rounded, size: 22),
-                            label: const FittedBox(child: Text('Đã gửi yêu cầu', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+                            key: const ValueKey('pending'), onPressed: () async { await _controller.toggleFriendStatusFromPanel(); },
+                            icon: const Icon(Icons.access_time_rounded, size: 22), label: const FittedBox(child: Text('Đã gửi yêu cầu', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
                             style: FilledButton.styleFrom(backgroundColor: Colors.orange, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), minimumSize: const Size.fromHeight(56)),
                           )
                         : relationStatus == 'awaiting'
                           ? FilledButton.icon(
-                              key: const ValueKey('awaiting'),
-                              onPressed: () async { await _controller.toggleFriendStatusFromPanel(); },
-                              icon: const Icon(Icons.check_circle_outline_rounded, size: 22),
-                              label: const FittedBox(child: Text('Chấp nhận lời mời', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+                              key: const ValueKey('awaiting'), onPressed: () async { await _controller.toggleFriendStatusFromPanel(); },
+                              icon: const Icon(Icons.check_circle_outline_rounded, size: 22), label: const FittedBox(child: Text('Chấp nhận lời mời', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
                               style: FilledButton.styleFrom(backgroundColor: Colors.green, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), minimumSize: const Size.fromHeight(56)),
                             )
                           : FilledButton.icon(
-                              key: const ValueKey('add_friend'),
-                              onPressed: () async { await _controller.toggleFriendStatusFromPanel(); },
-                              icon: const Icon(Icons.person_add_rounded, size: 22),
-                              label: const FittedBox(child: Text('Thêm bạn bè', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+                              key: const ValueKey('add_friend'), onPressed: () async { await _controller.toggleFriendStatusFromPanel(); },
+                              icon: const Icon(Icons.person_add_rounded, size: 22), label: const FittedBox(child: Text('Thêm bạn bè', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
                               style: FilledButton.styleFrom(backgroundColor: primaryColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), minimumSize: const Size.fromHeight(56)),
                             ),
                 ),
@@ -342,20 +340,70 @@ class _ContactsScreenState extends State<ContactsScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 32),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
-              if (isFriend) ...[
-                _buildInfoSectionHeader('Tùy chọn', textColor),
-                Container(
-                  decoration: BoxDecoration(color: surfaceColor, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))]),
-                  child: Column(
-                    children: [
-                      _buildActionTile(Icons.block_rounded, 'Chặn người dùng', Colors.orange),
-                    ],
+  // 🎯 GIAO DIỆN THÔNG TIN NHÓM (CỘT PHẢI)
+  Widget _buildGroupDetails(Color textColor, Color primaryColor, Color surfaceColor) {
+    final group = _controller.selectedGroup;
+    if (group == null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.groups_rounded, size: 80, color: textColor.withValues(alpha: 0.2)),
+            const SizedBox(height: 16),
+            Text('Chọn một nhóm để xem thông tin chi tiết', style: TextStyle(color: textColor.withValues(alpha: 0.5))),
+          ],
+        ),
+      );
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(40),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 600),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              CircleAvatar(radius: 60, backgroundImage: _getSmartAvatar(group['groupAvatarUrl'], group['groupName'] ?? 'G')),
+              const SizedBox(height: 24),
+              Text(group['groupName'] ?? 'Nhóm Chat', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold, color: textColor)),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(color: group['myRole'] == 'admin' ? Colors.green.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+                child: Text(group['myRole'] == 'admin' ? 'Trưởng Nhóm' : 'Thành viên', style: TextStyle(color: group['myRole'] == 'admin' ? Colors.green : textColor.withValues(alpha: 0.6), fontSize: 13, fontWeight: FontWeight.bold)),
+              ),
+              const SizedBox(height: 32),
+              
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _HoverableActionCard(
+                    icon: Icons.chat_rounded, label: 'Vào nhóm chat', primaryColor: primaryColor, surfaceColor: surfaceColor, textColor: textColor, 
+                    onTap: () {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => MainChatArea(
+                            isGroup: true, 
+                            chatId: group['id'], 
+                            chatName: group['groupName'] ?? 'Nhóm',
+                            chatAvatar: group['groupAvatarUrl'] ?? '',
+                          ),
+                        ),
+                      );
+                    }
                   ),
-                ),
-                const SizedBox(height: 40),
-              ]
+                ],
+              ),
+              const SizedBox(height: 24), 
             ],
           ),
         ),
@@ -372,14 +420,6 @@ class _ContactsScreenState extends State<ContactsScreen> {
       leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: primaryColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)), child: Icon(icon, color: primaryColor, size: 20)),
       title: Text(title, style: TextStyle(fontSize: 13, color: textColor.withValues(alpha: 0.5))),
       subtitle: Text(subtitle, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: textColor)),
-    );
-  }
-
-  Widget _buildActionTile(IconData icon, String title, Color color) {
-    return ListTile(
-      leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)), child: Icon(icon, color: color, size: 20)),
-      title: Text(title, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: color)),
-      onTap: () {},
     );
   }
 }

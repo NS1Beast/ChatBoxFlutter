@@ -28,6 +28,7 @@ builder.Services.AddDbContext<ChatDbContext>(options =>
 builder.Services.AddControllers();
 builder.Services.AddMemoryCache(); // 🎯 CHIÊU 1: Đã bật RAM Cache
 builder.Services.AddSingleton<EncryptionService>();
+builder.Services.AddHostedService<MessageCleanupService>();
 
 // 🎯 CHIÊU 2: ĐĂNG KÝ HÀNG ĐỢI BACKGROUND (Message Queue)
 builder.Services.AddSingleton<MessageQueue>(); 

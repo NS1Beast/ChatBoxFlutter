@@ -77,7 +77,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final callerName = (msg['callerName'] ?? 'Người gọi').toString();
     String callerAvatar = (msg['callerAvatar'] ?? '').toString();
     if (callerAvatar.isEmpty || callerAvatar == 'null') {
-      callerAvatar = "https://i.pravatar.cc/150"; // Avatar dự phòng
+      callerAvatar = "https://i.pravatar.cc/150"; 
     }
 
     AuthController().getCurrentUserId().then((currentUserId) {
@@ -87,8 +87,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         globalNavigatorKey.currentState?.push(MaterialPageRoute(
           builder: (context) => CallScreen(
             isVideoCall: isVideo,
-            userName: callerName, // Chèn Tên gọi
-            avatarUrl: callerAvatar, // Chèn Ảnh đại diện
+            userName: callerName, 
+            avatarUrl: callerAvatar, 
             conversationId: conversationId,
             isCaller: false,
             initialOfferPayload: content,
@@ -136,6 +136,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               width: 320,
               decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, border: Border(right: BorderSide(color: Colors.grey.withValues(alpha: 0.2), width: 1))),
               child: ChatListPanel(
+                controller: _globalContactsController,
                 onChatSelected: (userMap) {
                   _activeChatUser.value = userMap; 
                   _searchedUser.value = null; 
@@ -162,10 +163,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ? MainChatArea(
                         chatId: activeChatUser['id'],
                         chatName: activeChatUser['fullName'] ?? activeChatUser['name'] ?? 'Người dùng',
-                        chatAvatar: activeChatUser['avatarUrl'] ?? '',
+                        // 🎯 Lấy ảnh đại diện (nếu không có avatarUrl thì thử groupAvatarUrl)
+                        chatAvatar: activeChatUser['avatarUrl'] ?? activeChatUser['groupAvatarUrl'] ?? '',
                         chatCover: activeChatUser['coverUrl'] ?? '',
                         chatBio: activeChatUser['bio'] ?? '',
                         relationStatus: activeChatUser['relationStatus'] ?? 'friend',
+                        // 🎯 QUAN TRỌNG NHẤT: Bơm cờ isGroup vào đây để MainChatArea bật giao diện nhóm!
+                        isGroup: activeChatUser['isGroup'] ?? false, 
                       ) 
                     : const WelcomeScreen(), 
             ), 

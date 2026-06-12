@@ -2,6 +2,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../auth/AuthController.dart'; 
 
 class ContactsController extends ChangeNotifier {
@@ -10,11 +11,14 @@ class ContactsController extends ChangeNotifier {
   String searchQuery = "";
   
   Map<String, dynamic>? selectedFriend;
+  Map<String, dynamic>? selectedGroup; // 🎯 THÊM BIẾN QUẢN LÝ NHÓM ĐANG CHỌN
 
   // --- KẾT NỐI API BACKEND ---
   final String _baseUrl = 'http://localhost:5034/api/contacts';
+  final String _groupApiUrl = 'http://localhost:5034/api/Conversations'; // 🎯 THÊM URL NHÓM
   
   List<dynamic> friendsList = [];
+  List<dynamic> groupsList = []; // 🎯 THÊM LIST NHÓM
   bool isLoading = false;
 
   ContactsController() {
@@ -23,6 +27,7 @@ class ContactsController extends ChangeNotifier {
 
   Future<void> _initData() async {
     await loadFriends();
+    await loadGroups(); // 🎯 GỌI TẢI DANH SÁCH NHÓM
     if (friendsList.isNotEmpty) {
       selectedFriend = friendsList[0];
     }
@@ -32,11 +37,19 @@ class ContactsController extends ChangeNotifier {
   // --- LOGIC GIAO DIỆN ---
   void switchTab(int index) {
     currentTab = index;
+    // Tự động chọn item đầu tiên khi chuyển tab cho UI khỏi trống
+    if (index == 0 && friendsList.isNotEmpty) selectedFriend = friendsList[0];
+    if (index == 1 && groupsList.isNotEmpty) selectedGroup = groupsList[0];
     notifyListeners();
   }
 
   void selectFriend(Map<String, dynamic> friend) {
     selectedFriend = friend;
+    notifyListeners();
+  }
+
+  void selectGroup(Map<String, dynamic> group) {
+    selectedGroup = group;
     notifyListeners();
   }
 
@@ -49,6 +62,14 @@ class ContactsController extends ChangeNotifier {
     if (searchQuery.isEmpty) return friendsList;
     return friendsList.where((f) {
       String name = (f['name'] ?? '').toLowerCase();
+      return name.contains(searchQuery.toLowerCase());
+    }).toList();
+  }
+
+  List<dynamic> get filteredGroups {
+    if (searchQuery.isEmpty) return groupsList;
+    return groupsList.where((g) {
+      String name = (g['groupName'] ?? '').toLowerCase();
       return name.contains(searchQuery.toLowerCase());
     }).toList();
   }
@@ -78,86 +99,75 @@ class ContactsController extends ChangeNotifier {
     notifyListeners();
   }
 
-  // 2. Tìm người dùng theo Email (Trả về Dữ liệu)
+  // 🎯 2. Tải danh sách Nhóm
+  Future<void> loadGroups() async {
+    try {
+      const storage = FlutterSecureStorage();
+      String? token = await storage.read(key: 'jwt_token');
+      final response = await http.get(
+        Uri.parse('$_groupApiUrl/my-groups'),
+        headers: { 'Authorization': 'Bearer $token' }
+      );
+      
+      if (response.statusCode == 200) {
+        groupsList = jsonDecode(response.body);
+      }
+    } catch (e) {
+      debugPrint("Lỗi tải danh sách nhóm: $e");
+    }
+    notifyListeners();
+  }
+
+  // 3. Tìm người dùng theo Email
   Future<Map<String, dynamic>?> searchUser(String email, {BuildContext? context}) async {
     String currentUserId = await AuthController().getCurrentUserId();
     try {
       final response = await http.get(Uri.parse('$_baseUrl/search?email=$email&currentUserId=$currentUserId'));
-      
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body);
-      } else {
-        // 🎯 LẤY LỖI "TÌM CHÍNH MÌNH" TỪ BACKEND VÀ HIỂN THỊ SNACKBAR
-        if (context != null && context.mounted) {
-          final msg = jsonDecode(response.body)['message'] ?? "Lỗi tìm kiếm";
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.redAccent));
-        }
+      if (response.statusCode == 200) return jsonDecode(response.body);
+      else if (context != null && context.mounted) {
+        final msg = jsonDecode(response.body)['message'] ?? "Lỗi tìm kiếm";
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.redAccent));
       }
-    } catch (e) {
-      debugPrint("Lỗi tìm kiếm: $e");
-    }
+    } catch (e) { debugPrint("Lỗi tìm kiếm: $e"); }
     return null;
   }
 
-  // 3. Tìm người dùng trên toàn hệ thống (Cập nhật UI)
+  // 4. Tìm người dùng trên toàn hệ thống (Cập nhật UI)
   Future<void> searchGlobalUser(BuildContext context, String email) async {
     if (email.trim().isEmpty) return;
-
-    // 🎯 ĐÃ SỬA CHỖ NÀY: Truyền context vào để hàm searchUser có thể bung SnackBar lỗi
     var result = await searchUser(email.trim(), context: context); 
-    
     if (result != null) {
       selectedFriend = {
-        'id': result['id'],
-        'name': result['fullName'] ?? 'Người dùng',
-        'avatarUrl': result['avatarUrl'] ?? '',
-        'coverUrl': result['coverUrl'] ?? '', 
+        'id': result['id'], 'name': result['fullName'] ?? 'Người dùng',
+        'avatarUrl': result['avatarUrl'] ?? '', 'coverUrl': result['coverUrl'] ?? '', 
         'bio': result['bio'] ?? 'Chưa có thông tin',
-        // 🎯 Hứng thêm 2 trạng thái này để Giao diện biết đường xử lý
-        'relationStatus': result['relationStatus'] ?? 'none',
-        'isFriend': result['isFriend'] ?? false
+        'relationStatus': result['relationStatus'] ?? 'none', 'isFriend': result['isFriend'] ?? false
       };
       notifyListeners();
-    } else {
-      // Vì lỗi "tìm chính mình" đã được show ở searchUser, nên đoạn dưới đây tui thêm check
-      // để nếu không tìm thấy thật thì mới báo lỗi này, tránh báo 2 lỗi cùng lúc.
-      if (context.mounted) {
-        // Có thể ẩn dòng thông báo chung chung này đi nếu muốn, hoặc giữ nguyên cũng được.
-        // ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Không tìm thấy người dùng này trên hệ thống!')));
-      }
     }
   }
 
-  // 4. Thêm / Hủy kết bạn
+  // 5. Thêm / Hủy kết bạn
   Future<String> toggleFriendStatus(String friendId) async {
     String currentUserId = await AuthController().getCurrentUserId();
     try {
       final response = await http.post(
-        Uri.parse('$_baseUrl/add'),
-        headers: {'Content-Type': 'application/json'},
+        Uri.parse('$_baseUrl/add'), headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'userId': currentUserId, 'friendId': friendId}),
       );
-      
       if (response.statusCode == 200) {
         await loadFriends(); 
         return jsonDecode(response.body)['status']; 
       }
-    } catch (e) {
-      debugPrint("Lỗi kết bạn: $e");
-    }
+    } catch (e) { debugPrint("Lỗi kết bạn: $e"); }
     return "none"; 
   }
 
-  // Nút Kết bạn / Hủy bạn ở cột Phải màn hình
   Future<void> toggleFriendStatusFromPanel() async {
     if (selectedFriend == null) return;
-    
     String newStatus = await toggleFriendStatus(selectedFriend!['id']);
-    
-    // Cập nhật lại dữ liệu để UI thay đổi theo
     selectedFriend!['relationStatus'] = newStatus;
     selectedFriend!['isFriend'] = (newStatus == 'friend');
-    
     notifyListeners();
   }
 }
