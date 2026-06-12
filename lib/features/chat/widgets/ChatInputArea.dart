@@ -53,10 +53,7 @@ class _ChatInputAreaState extends State<ChatInputArea> {
     _debounce?.cancel();
     super.dispose();
   }
-
-  // ==========================================
   // LOGIC API GIPHY
-  // ==========================================
   Future<void> _fetchTrendingGifs() async {
     if (_giphyApiKey == 'YOUR_GIPHY_API_KEY') return; 
     
@@ -74,7 +71,7 @@ class _ChatInputAreaState extends State<ChatInputArea> {
     } catch (e) {
       debugPrint('Lỗi tải GIF: $e');
     } finally {
-      if (mounted) setState(() => _isLoadingGifs = false); // 🎯 KẸP ĐIỀU KIỆN
+      if (mounted) setState(() => _isLoadingGifs = false);
     }
   }
 
@@ -87,12 +84,12 @@ class _ChatInputAreaState extends State<ChatInputArea> {
       }
       if (_giphyApiKey == 'YOUR_GIPHY_API_KEY') return;
       
-      if (mounted) setState(() => _isLoadingGifs = true); // 🎯 KẸP ĐIỀU KIỆN
+      if (mounted) setState(() => _isLoadingGifs = true); 
       try {
         final response = await http.get(Uri.parse('https://api.giphy.com/v1/gifs/search?api_key=$_giphyApiKey&q=$query&limit=20&rating=g'));
         if (response.statusCode == 200) {
           final data = json.decode(response.body);
-          if (mounted) { // 🎯 KẸP ĐIỀU KIỆN
+          if (mounted) {
             setState(() {
               _gifUrls = (data['data'] as List).map((gif) => gif['images']['fixed_height']['url'].toString()).toList();
             });
@@ -101,14 +98,12 @@ class _ChatInputAreaState extends State<ChatInputArea> {
       } catch (e) {
         debugPrint('Lỗi tìm GIF: $e');
       } finally {
-        if (mounted) setState(() => _isLoadingGifs = false); // 🎯 KẸP ĐIỀU KIỆN
+        if (mounted) setState(() => _isLoadingGifs = false); 
       }
     });
   }
 
-  // ==========================================
   // LOGIC GHI ÂM & NHẬP LIỆU
-  // ==========================================
   void _startRecording() {
     setState(() {
       _showEmojiPicker = false; 
@@ -116,7 +111,6 @@ class _ChatInputAreaState extends State<ChatInputArea> {
       _recordDuration = 0;
     });
     
-    // 🎯 SỬA LỖI ĐƠ APP LÚC ĐANG GHI ÂM CHUYỂN GROUP
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) { 
         setState(() => _recordDuration++);
@@ -167,10 +161,7 @@ class _ChatInputAreaState extends State<ChatInputArea> {
       });
     }
   }
-
-  // ==========================================
   // XÂY DỰNG GIAO DIỆN
-  // ==========================================
   @override
   Widget build(BuildContext context) {
     final surfaceColor = Theme.of(context).colorScheme.surface;

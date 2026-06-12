@@ -4,10 +4,8 @@ class ChatMessage {
   final String type;
   final bool isMe;
   final String time;
-  
-  // 🎯 THÊM 2 BIẾN NÀY CHO TÍNH NĂNG MỚI
   final String? replyToText; 
-  Map<String, int> reactions; // Dùng Map để lưu Emoji và Số lượng (VD: {'❤️': 2, '👍': 1})
+  Map<String, int> reactions; // Dùng Map để lưu Emoji và Số lượng
 
   ChatMessage({
     this.id,

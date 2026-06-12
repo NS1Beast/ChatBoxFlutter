@@ -37,6 +37,7 @@ class CallScreenController {
 
   final List<RTCIceCandidate> _pendingIceCandidates = [];
   final Set<String> _sentIceCandidateTexts = <String>{};
+
   bool get isClosed => _isDisposed || _isEnding;
 
   CallScreenController({
@@ -48,6 +49,7 @@ class CallScreenController {
     required this.onCallEndedByRemote,
   });
 
+  // Khởi tạo renderer, camera, micro và PeerConnection
   Future<void> initHardware() async {
     if (_isDisposed || _isEnding) return;
 
@@ -111,6 +113,7 @@ class CallScreenController {
     debugPrint('✅ Init phần cứng gọi điện xong');
   }
 
+  // Lắng nghe và phân loại tín hiệu WebRTC nhận từ SignalR
   void _webRTCSignalListener() {
     if (_isDisposed || _isEnding) return;
 
@@ -134,12 +137,11 @@ class CallScreenController {
     } else if (type == 'ice') {
       unawaited(_handleIncomingSignal('ice', content));
     } else if (type == 'end') {
-      // Remote đã tắt cuộc gọi.
-      // Không gửi lại signal 'end' nữa để tránh vòng lặp và double-cleanup.
       onCallEndedByRemote();
     }
   }
 
+  // Tạo PeerConnection và gắn local track vào kết nối WebRTC
   Future<void> _createPeerConnection() async {
     if (_isDisposed || _isEnding) return;
 
@@ -193,6 +195,7 @@ class CallScreenController {
     };
 
     final tracks = _localStream?.getTracks() ?? [];
+
     for (final track in tracks) {
       if (_isDisposed || _isEnding) return;
       await pc.addTrack(track, _localStream!);
@@ -212,30 +215,29 @@ class CallScreenController {
     };
 
     pc.onIceCandidate = (candidate) {
-  if (_isDisposed || _isEnding) return;
+      if (_isDisposed || _isEnding) return;
 
-  final candidateMap = candidate.toMap();
-  final candidateText = candidateMap['candidate']?.toString();
+      final candidateMap = candidate.toMap();
+      final candidateText = candidateMap['candidate']?.toString();
 
-  if (candidateText == null || candidateText.isEmpty) return;
+      if (candidateText == null || candidateText.isEmpty) return;
 
-  // Chống gửi trùng candidate.
-  if (!_sentIceCandidateTexts.add(candidateText)) return;
+      // Tránh gửi trùng ICE candidate qua SignalR
+      if (!_sentIceCandidateTexts.add(candidateText)) return;
 
-  // Tuyệt đối không timeout ICE ở đây.
-  // SignalRService sẽ tự queue tuần tự để tránh nghẽn connection.
-  unawaited(
-    signalR.sendCallSignal(
-      conversationId,
-      'ice',
-      jsonEncode(candidateMap),
-    ),
-  );
-};
+      unawaited(
+        signalR.sendCallSignal(
+          conversationId,
+          'ice',
+          jsonEncode(candidateMap),
+        ),
+      );
+    };
 
     debugPrint('✅ PeerConnection đã tạo xong');
   }
 
+  // Tạo và gửi offer khi người dùng là bên gọi
   Future<void> startCallOffer() async {
     if (_isDisposed || _isEnding) return;
 
@@ -272,11 +274,14 @@ class CallScreenController {
     }
   }
 
+  // Xử lý offer đầu tiên khi người dùng là bên nhận cuộc gọi
   Future<void> processInitialOffer(String offerPayload) async {
     if (_isDisposed || _isEnding) return;
+
     await _handleIncomingSignal('offer', offerPayload);
   }
 
+  // Xử lý offer, answer và ICE candidate từ bên còn lại
   Future<void> _handleIncomingSignal(String type, String payloadStr) async {
     if (_isDisposed || _isEnding) return;
     if (payloadStr.isEmpty) return;
@@ -289,6 +294,7 @@ class CallScreenController {
 
       if (type == 'offer') {
         if (_hasHandledOffer) return;
+
         _hasHandledOffer = true;
 
         await pc.setRemoteDescription(
@@ -322,6 +328,7 @@ class CallScreenController {
         debugPrint('📤 Đã gửi answer');
       } else if (type == 'answer') {
         if (_hasHandledAnswer) return;
+
         _hasHandledAnswer = true;
 
         await pc.setRemoteDescription(
@@ -353,6 +360,7 @@ class CallScreenController {
     }
   }
 
+  // Thêm các ICE candidate đã nhận trước khi có remote description
   Future<void> _flushPendingIceCandidates() async {
     if (!_hasRemoteDescription) return;
     if (_pendingIceCandidates.isEmpty) return;
@@ -375,12 +383,14 @@ class CallScreenController {
     }
   }
 
+  // Bật hoặc tắt micro trong cuộc gọi
   void toggleMute() {
     if (_isDisposed || _isEnding) return;
 
     isMuted = !isMuted;
 
     final audioTracks = _localStream?.getAudioTracks() ?? [];
+
     if (audioTracks.isNotEmpty) {
       audioTracks.first.enabled = !isMuted;
     }
@@ -388,6 +398,7 @@ class CallScreenController {
     debugPrint(isMuted ? '🔇 Đã tắt mic' : '🎙️ Đã bật mic');
   }
 
+  // Bật hoặc tắt camera trong cuộc gọi video
   void toggleCamera() {
     if (_isDisposed || _isEnding) return;
     if (!isVideoCall) return;
@@ -395,6 +406,7 @@ class CallScreenController {
     isCameraOff = !isCameraOff;
 
     final videoTracks = _localStream?.getVideoTracks() ?? [];
+
     if (videoTracks.isNotEmpty) {
       videoTracks.first.enabled = !isCameraOff;
     }
@@ -402,6 +414,7 @@ class CallScreenController {
     debugPrint(isCameraOff ? '📷 Đã tắt camera' : '📷 Đã bật camera');
   }
 
+  // Kết thúc cuộc gọi, gửi tín hiệu end và ghi log cuộc gọi
   Future<void> hangUp(
     bool isCaller, {
     bool notifyRemote = true,
@@ -432,6 +445,7 @@ class CallScreenController {
         final duration = DateTime.now().difference(callStartTime!);
         final min = duration.inMinutes.toString().padLeft(2, '0');
         final sec = (duration.inSeconds % 60).toString().padLeft(2, '0');
+
         messageContent = 'Cuộc gọi kết thúc. Thời lượng: $min:$sec';
       }
 
@@ -445,6 +459,7 @@ class CallScreenController {
     await disposeHardware();
   }
 
+  // Giải phóng toàn bộ tài nguyên WebRTC sau khi kết thúc cuộc gọi
   Future<void> disposeHardware() async {
     if (_isDisposed) return;
 
@@ -465,7 +480,6 @@ class CallScreenController {
 
     _pendingIceCandidates.clear();
 
-    // Chặn callback native bắn ngược vào UI trong lúc dispose.
     try {
       pc?.onTrack = null;
       pc?.onIceCandidate = null;
@@ -477,7 +491,6 @@ class CallScreenController {
       debugPrint('⚠️ Gỡ callback PeerConnection lỗi: $e');
     }
 
-    // Detach stream khỏi renderer trước để GPU không còn dựng frame.
     try {
       localRenderer.srcObject = null;
       remoteRenderer.srcObject = null;
@@ -487,7 +500,6 @@ class CallScreenController {
 
     await Future.delayed(const Duration(milliseconds: 50));
 
-    // Close peer connection trước.
     try {
       await pc?.close().timeout(const Duration(seconds: 2));
     } catch (e) {
@@ -497,7 +509,6 @@ class CallScreenController {
     await _disposeStreamSafely(localStream, 'localStream');
     await _disposeStreamSafely(remoteStream, 'remoteStream');
 
-    // Dispose peer connection sau khi close + dispose stream.
     try {
       await pc?.dispose().timeout(const Duration(seconds: 2));
     } catch (e) {
@@ -525,6 +536,7 @@ class CallScreenController {
     debugPrint('✅ Cleanup WebRTC desktop xong');
   }
 
+  // Dừng track và dispose MediaStream an toàn
   Future<void> _disposeStreamSafely(MediaStream? stream, String name) async {
     if (stream == null) return;
 

@@ -8,7 +8,7 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: brightness,
-      fontFamily: 'Segoe UI', // Hoặc font bạn đang dùng
+      fontFamily: 'Segoe UI', // Font chữ hiện đại, dễ đọc
       colorScheme: ColorScheme.fromSeed(
         seedColor: primaryColor,
         primary: primaryColor,

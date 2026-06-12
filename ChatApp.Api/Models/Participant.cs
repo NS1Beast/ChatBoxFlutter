@@ -5,9 +5,7 @@ namespace ChatApp.Api.Models
 {
     public class Participant
     {
-        // 🎯 LƯU Ý: Nếu dùng EF Core, ông phải cấu hình Composite Key trong file DbContext bằng Fluent API
-        // (modelBuilder.Entity<Participant>().HasKey(p => new { p.ConversationId, p.UserId });)
-        
+  
         public Guid ConversationId { get; set; }
         
         public Guid UserId { get; set; }

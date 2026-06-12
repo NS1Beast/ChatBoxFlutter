@@ -8,10 +8,13 @@ import 'package:flutter/foundation.dart';
 
 class SignalRService {
   static final SignalRService _instance = SignalRService._internal();
+
   factory SignalRService() => _instance;
+
   SignalRService._internal();
 
   HubConnection? _hubConnection;
+
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
   final ValueNotifier<Map<String, dynamic>?> incomingMessage =
@@ -20,8 +23,7 @@ class SignalRService {
   final ValueNotifier<Map<String, dynamic>?> webRTCSignal =
       ValueNotifier<Map<String, dynamic>?>(null);
 
-  // 🎯 THÊM: KÊNH PHÁT SÓNG TRẠNG THÁI ONLINE/OFFLINE
-  final ValueNotifier<Map<String, dynamic>?> userStatusSignal = 
+  final ValueNotifier<Map<String, dynamic>?> userStatusSignal =
       ValueNotifier<Map<String, dynamic>?>(null);
 
   final Set<String> _joinedConversations = <String>{};
@@ -35,8 +37,11 @@ class SignalRService {
   bool get isConnected =>
       _hubConnection?.state == HubConnectionState.Connected;
 
+  // Khởi động kết nối SignalR nếu chưa kết nối
   Future<void> startConnection() async {
-    if (_hubConnection?.state == HubConnectionState.Connected) return;
+    if (_hubConnection?.state == HubConnectionState.Connected) {
+      return;
+    }
 
     if (_startFuture != null) {
       await _startFuture;
@@ -52,6 +57,7 @@ class SignalRService {
     }
   }
 
+  // Tạo HubConnection, đăng ký các sự kiện realtime và bắt đầu kết nối
   Future<void> _startConnectionInternal() async {
     try {
       final token = await _storage.read(key: 'jwt_token');
@@ -82,27 +88,8 @@ class SignalRService {
 
       _hubConnection?.on('ReceiveMessage', _handleIncomingMessage);
       _hubConnection?.on('ReceiveWebRTCSignal', _handleWebRTCSignal);
-
-      // 🎯 THÊM: BẮT SỰ KIỆN TỪ SERVER BÁO CÓ NGƯỜI ONLINE/OFFLINE
-      _hubConnection?.on('UserOnline', (args) {
-        if (args != null && args.isNotEmpty) {
-          userStatusSignal.value = {
-            'userId': args[0].toString(),
-            'isOnline': true,
-            'timestamp': DateTime.now().millisecondsSinceEpoch
-          };
-        }
-      });
-
-      _hubConnection?.on('UserOffline', (args) {
-        if (args != null && args.isNotEmpty) {
-          userStatusSignal.value = {
-            'userId': args[0].toString(),
-            'isOnline': false,
-            'timestamp': DateTime.now().millisecondsSinceEpoch
-          };
-        }
-      });
+      _hubConnection?.on('UserOnline', _handleUserOnline);
+      _hubConnection?.on('UserOffline', _handleUserOffline);
 
       _hubConnection?.onclose(({error}) {
         debugPrint('🛑 SignalR đóng kết nối: $error');
@@ -127,6 +114,7 @@ class SignalRService {
     }
   }
 
+  // Ngắt kết nối SignalR và xóa danh sách phòng đã tham gia
   Future<void> stopConnection() async {
     try {
       _joinedConversations.clear();
@@ -142,17 +130,25 @@ class SignalRService {
     }
   }
 
-  // 🎯 THÊM: HÀM CHO FLUTTER HỎI THĂM TRẠNG THÁI (LÚC MỚI VÀO PHÒNG)
+  // Kiểm tra trạng thái online của một người dùng
   Future<bool> checkUserOnline(String userId) async {
-    if (!isConnected) await startConnection();
+    if (!isConnected) {
+      await startConnection();
+    }
+
     try {
-      final result = await _hubConnection?.invoke('IsUserOnline', args: [userId]);
+      final result = await _hubConnection?.invoke(
+        'IsUserOnline',
+        args: [userId],
+      );
+
       return result == true;
     } catch (e) {
       return false;
     }
   }
 
+  // Gửi tin nhắn qua SignalR đến một cuộc trò chuyện
   Future<void> sendMessage(
     String conversationId,
     String content,
@@ -189,6 +185,7 @@ class SignalRService {
     }
   }
 
+  // Đưa tín hiệu WebRTC vào hàng đợi để gửi tuần tự
   Future<void> sendCallSignal(
     String conversationId,
     String type,
@@ -207,6 +204,7 @@ class SignalRService {
     return _callSignalQueue;
   }
 
+  // Gửi trực tiếp tín hiệu WebRTC qua SignalR
   Future<void> _sendCallSignalNow(
     String normalizedConversationId,
     String type,
@@ -248,6 +246,7 @@ class SignalRService {
     }
   }
 
+  // Tham gia group SignalR tương ứng với một cuộc trò chuyện
   Future<void> joinConversation(String conversationId) async {
     final normalizedConversationId = _normalizeConversationId(conversationId);
 
@@ -278,8 +277,11 @@ class SignalRService {
     }
   }
 
+  // Tham gia lại các phòng chat sau khi SignalR reconnect
   Future<void> _rejoinAllConversations() async {
-    if (!isConnected || _joinedConversations.isEmpty) return;
+    if (!isConnected || _joinedConversations.isEmpty) {
+      return;
+    }
 
     final rooms = List<String>.from(_joinedConversations);
     _joinedConversations.clear();
@@ -289,8 +291,11 @@ class SignalRService {
     }
   }
 
+  // Xử lý tin nhắn chat nhận được từ SignalR
   void _handleIncomingMessage(List<Object?>? args) {
-    if (args == null || args.isEmpty || args[0] == null) return;
+    if (args == null || args.isEmpty || args[0] == null) {
+      return;
+    }
 
     final raw = args[0];
 
@@ -312,6 +317,7 @@ class SignalRService {
     }
   }
 
+  // Xử lý tín hiệu WebRTC nhận được từ SignalR
   void _handleWebRTCSignal(List<Object?>? args) {
     if (args == null || args.length < 3) {
       debugPrint('❌ WebRTC signal sai format: $args');
@@ -347,6 +353,29 @@ class SignalRService {
     }
   }
 
+  // Cập nhật trạng thái online khi server phát sự kiện UserOnline
+  void _handleUserOnline(List<Object?>? args) {
+    if (args != null && args.isNotEmpty) {
+      userStatusSignal.value = {
+        'userId': args[0].toString(),
+        'isOnline': true,
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+      };
+    }
+  }
+
+  // Cập nhật trạng thái offline khi server phát sự kiện UserOffline
+  void _handleUserOffline(List<Object?>? args) {
+    if (args != null && args.isNotEmpty) {
+      userStatusSignal.value = {
+        'userId': args[0].toString(),
+        'isOnline': false,
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+      };
+    }
+  }
+
+  // Chuẩn hóa conversationId để tránh lệch định dạng khi join hoặc gửi tin
   String _normalizeConversationId(String conversationId) {
     return conversationId.trim().toLowerCase();
   }

@@ -30,7 +30,6 @@ class _ChatListPanelState extends State<ChatListPanel> {
   @override
   void initState() {
     super.initState();
-    // 🎯 CHỈ ĐĂNG KÝ LISTENER SAU KHI VẼ XONG
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         widget.controller.addListener(_safeOnDataChanged);
@@ -40,17 +39,14 @@ class _ChatListPanelState extends State<ChatListPanel> {
     });
   }
 
-  // 🎯 HÀM BỌC AN TOÀN TUYỆT ĐỐI CHO SETSTATE
   void _safeOnDataChanged() {
     if (!mounted) return;
     
-    // Nếu Flutter đang bận xếp gạch vẽ màn hình, thì xếp lịch gọi lại sau.
     if (SchedulerBinding.instance.schedulerPhase != SchedulerPhase.idle) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) setState(() {});
       });
     } else {
-      // Nếu rảnh thì vẽ lại luôn
       setState(() {});
     }
   }

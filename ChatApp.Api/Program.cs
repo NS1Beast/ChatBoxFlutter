@@ -1,80 +1,65 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.AspNetCore.Authentication.Google; // 🎯 BẮT BUỘC PHẢI CÓ DÒNG NÀY ĐỂ TRÁNH LỖI SCHEME 'Google'
+using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
-using ChatApp.Api.Models; 
-using ChatApp.Api.Services; 
-using ChatApp.Api.Hubs; 
+using ChatApp.Api.Models;
+using ChatApp.Api.Services;
+using ChatApp.Api.Hubs;
 using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ==========================================
-// 1. DATABASE POSTGRESQL
-// ==========================================
+// Cấu hình PostgreSQL và bật hỗ trợ JSON động cho Npgsql
 var connString = builder.Configuration.GetConnectionString("DefaultConnection");
 var dataSourceBuilder = new NpgsqlDataSourceBuilder(connString);
-dataSourceBuilder.EnableDynamicJson(); 
+dataSourceBuilder.EnableDynamicJson();
+
 var dataSource = dataSourceBuilder.Build();
 
 builder.Services.AddDbContext<ChatDbContext>(options =>
     options.UseNpgsql(dataSource));
 
-// ==========================================
-// 2. CONTROLLERS & SERVICES
-// ==========================================
+// Đăng ký controller, cache và các service xử lý nghiệp vụ
 builder.Services.AddControllers();
-builder.Services.AddMemoryCache(); // 🎯 CHIÊU 1: Đã bật RAM Cache
+builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<EncryptionService>();
 builder.Services.AddHostedService<MessageCleanupService>();
 
-// 🎯 CHIÊU 2: ĐĂNG KÝ HÀNG ĐỢI BACKGROUND (Message Queue)
-builder.Services.AddSingleton<MessageQueue>(); 
+// Đăng ký hàng đợi và service chạy nền để lưu tin nhắn vào database
+builder.Services.AddSingleton<MessageQueue>();
 builder.Services.AddHostedService<MessageProcessorService>();
 
-// ==========================================
-// 3. SIGNALR & CORS
-// ==========================================
+// Cấu hình SignalR cho realtime chat và call
 var signalRBuilder = builder.Services.AddSignalR();
 
-/* ==========================================
-   🎯 CHIÊU 3: REDIS BACKPLANE (Scale Out)
-   Để chạy được dòng này:
-   1. Cài NuGet: dotnet add package Microsoft.AspNetCore.SignalR.StackExchangeRedis
-   2. Cài phần mềm Redis Server (hoặc chạy Docker: docker run -p 6379:6379 redis)
-   
-   Nếu ông chỉ đang code trên 1 máy, hãy comment nó lại. Khi nào đem lên Server thật (AWS/Azure) thì mở ra!
-   ========================================== */
-// signalRBuilder.AddStackExchangeRedis("localhost:6379", options => {
+// Redis backplane dùng khi cần scale SignalR nhiều server
+// signalRBuilder.AddStackExchangeRedis("localhost:6379", options =>
+// {
 //     options.Configuration.ChannelPrefix = "ChatApp_Prod";
 // });
 
+// Cho phép Flutter app gọi API và SignalR
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFlutterApp", policy =>
-        policy.SetIsOriginAllowed(_ => true) 
+        policy.SetIsOriginAllowed(_ => true)
             .AllowAnyMethod()
             .AllowAnyHeader()
             .AllowCredentials());
 });
 
-// ==========================================
-// 4. 🎯 CẤU HÌNH AUTHENTICATION CHUẨN KÉP (TÁCH BẠCH RÕ RÀNG)
-// ==========================================
+// Cấu hình xác thực bằng JWT cho API, SignalR và Cookie cho Google login
 builder.Services.AddAuthentication(options =>
 {
-    // Mặc định API và SignalR check quyền bằng JWT
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
     options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-    
-    // 🎯 CHÌA KHÓA Ở ĐÂY: Bắt buộc dùng Cookie để lưu trạng thái tạm khi SignIn Google
     options.DefaultSignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
 })
-// Khai báo Scheme 1: JWT Bearer (Dùng cho SignalR và API)
 .AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, options =>
 {
+    // Kiểm tra JWT token khi client gọi API hoặc kết nối SignalR
     options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuer = true,
@@ -83,44 +68,44 @@ builder.Services.AddAuthentication(options =>
         ValidateIssuerSigningKey = true,
         ValidIssuer = builder.Configuration["Jwt:Issuer"],
         ValidAudience = builder.Configuration["Jwt:Audience"],
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
+        IssuerSigningKey = new SymmetricSecurityKey(
+            Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!)
+        )
     };
 
-    // Bắt token từ URL cho SignalR
+    // Lấy access_token từ query string khi Flutter kết nối SignalR
     options.Events = new JwtBearerEvents
     {
         OnMessageReceived = context =>
         {
             var accessToken = context.Request.Query["access_token"];
             var path = context.HttpContext.Request.Path;
+
             if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/chatHub"))
             {
                 context.Token = accessToken;
             }
+
             return Task.CompletedTask;
         }
     };
 })
-// Khai báo Scheme 2: Cookie
 .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme)
-// Khai báo Scheme 3: Google
 .AddGoogle(GoogleDefaults.AuthenticationScheme, options =>
 {
+    // Cấu hình Google OAuth cho đăng nhập mạng xã hội
     options.ClientId = builder.Configuration["Authentication:Google:ClientId"]!;
     options.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"]!;
-    // Ràng buộc Google phải xài Cookie để lưu state
     options.SignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
 });
 
-// ==========================================
-// 5. SWAGGER
-// ==========================================
+// Cấu hình Swagger để test API trong môi trường development
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// HTTP REQUEST PIPELINE
+// Bật Swagger khi chạy development
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();

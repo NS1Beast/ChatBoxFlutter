@@ -15,27 +15,33 @@ namespace ChatApp.Api.Controllers
             _context = context;
         }
 
-        // ==========================================
-        // 1. API CẬP NHẬT AVATAR
-        // ==========================================
+        // Cập nhật ảnh đại diện của người dùng
         [HttpPost("update-avatar")]
         public async Task<IActionResult> UpdateAvatar([FromBody] UpdateImageRequest request)
         {
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == request.UserId);
-            if (user == null) return NotFound(new { message = "Không tìm thấy User" });
+
+            if (user == null)
+                return NotFound(new { message = "Không tìm thấy User" });
 
             user.Avatarurl = request.ImageBase64;
+
             await _context.SaveChangesAsync();
 
             return Ok(new { message = "Cập nhật Avatar thành công!" });
         }
+
+        // Lấy thông tin hồ sơ người dùng theo id
         [HttpGet("profile/{id}")]
         public async Task<IActionResult> GetProfile(Guid id)
         {
             var user = await _context.Users.FindAsync(id);
-            if (user == null) return NotFound();
 
-            return Ok(new {
+            if (user == null)
+                return NotFound();
+
+            return Ok(new
+            {
                 fullname = user.Fullname,
                 email = user.Email,
                 avatar = user.Avatarurl,
@@ -43,22 +49,23 @@ namespace ChatApp.Api.Controllers
             });
         }
 
-        // ==========================================
-        // 2. API CẬP NHẬT ẢNH BÌA (COVER BACKGROUND)
-        // ==========================================
+        // Cập nhật ảnh bìa của người dùng
         [HttpPost("update-cover")]
         public async Task<IActionResult> UpdateCover([FromBody] UpdateImageRequest request)
         {
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == request.UserId);
-            if (user == null) return NotFound(new { message = "Không tìm thấy User" });
 
-            // Lưu nguyên chuỗi Base64 vào cột Coverurl
+            if (user == null)
+                return NotFound(new { message = "Không tìm thấy User" });
+
             user.Coverurl = request.ImageBase64;
+
             await _context.SaveChangesAsync();
 
             return Ok(new { message = "Cập nhật Background thành công!" });
         }
 
+        // Model nhận dữ liệu ảnh dạng Base64 từ client
         public class UpdateImageRequest
         {
             public Guid UserId { get; set; }

@@ -4,11 +4,13 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class GroupApiService {
   static const String baseUrl = 'http://localhost:5034/api/Conversations';
+
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
-  // 1. TẠO NHÓM MỚI
+  // Tạo nhóm chat mới và trả về conversationId
   Future<String?> createGroup(String groupName, List<String> memberIds) async {
     final token = await _storage.read(key: 'jwt_token');
+
     final response = await http.post(
       Uri.parse('$baseUrl/group'),
       headers: {
@@ -17,21 +19,22 @@ class GroupApiService {
       },
       body: jsonEncode({
         'groupName': groupName,
-        'memberIds': memberIds, // Truyền list UUID của bạn bè vào đây
+        'memberIds': memberIds,
       }),
     );
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
-      return data['conversationId']; // Trả về ID phòng để nhét vào MainChatArea
-    } else {
-      throw Exception('Lỗi tạo nhóm: ${jsonDecode(response.body)['message']}');
+      return data['conversationId'];
     }
+
+    throw Exception('Lỗi tạo nhóm: ${jsonDecode(response.body)['message']}');
   }
 
-  // 2. THÊM THÀNH VIÊN
+  // Thêm thành viên mới vào nhóm chat
   Future<bool> addMembers(String conversationId, List<String> newMemberIds) async {
     final token = await _storage.read(key: 'jwt_token');
+
     final response = await http.post(
       Uri.parse('$baseUrl/$conversationId/members'),
       headers: {
@@ -41,13 +44,17 @@ class GroupApiService {
       body: jsonEncode(newMemberIds),
     );
 
-    if (response.statusCode == 200) return true;
+    if (response.statusCode == 200) {
+      return true;
+    }
+
     throw Exception(jsonDecode(response.body)['message'] ?? 'Lỗi thêm thành viên');
   }
 
-  // 3. KICK THÀNH VIÊN (TRƯỞNG NHÓM)
+  // Mời một thành viên ra khỏi nhóm chat
   Future<bool> kickMember(String conversationId, String userIdToKick) async {
     final token = await _storage.read(key: 'jwt_token');
+
     final response = await http.delete(
       Uri.parse('$baseUrl/$conversationId/members/$userIdToKick'),
       headers: {
@@ -56,9 +63,10 @@ class GroupApiService {
       },
     );
 
-    if (response.statusCode == 200) return true;
-    
-    // Nếu bị mã 403 (Không phải admin) nó sẽ văng lỗi với dòng chữ "Chỉ trưởng nhóm..."
+    if (response.statusCode == 200) {
+      return true;
+    }
+
     throw Exception(jsonDecode(response.body)['message'] ?? 'Lỗi kick thành viên');
   }
 }

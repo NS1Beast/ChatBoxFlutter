@@ -4,18 +4,24 @@ import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
 
 class OpenIDService {
   final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
+
   bool _isGoogleInitialized = false;
 
   bool get _isDesktop {
-    if (kIsWeb) return false;
+    if (kIsWeb) {
+      return false;
+    }
 
     return defaultTargetPlatform == TargetPlatform.windows ||
         defaultTargetPlatform == TargetPlatform.macOS ||
         defaultTargetPlatform == TargetPlatform.linux;
   }
 
+  // Khởi tạo Google Sign-In trước khi đăng nhập hoặc đăng xuất
   Future<void> _ensureGoogleInitialized() async {
-    if (_isGoogleInitialized) return;
+    if (_isGoogleInitialized) {
+      return;
+    }
 
     await _googleSignIn.initialize(
       serverClientId:
@@ -25,9 +31,7 @@ class OpenIDService {
     _isGoogleInitialized = true;
   }
 
-  // ==========================================
-  // 1. ĐĂNG NHẬP GOOGLE
-  // ==========================================
+  // Đăng nhập Google trên mobile/web hoặc chuyển sang OAuth popup trên desktop
   Future<String?> signInWithGoogle() async {
     if (_isDesktop) {
       return _handleDesktopOAuth('google');
@@ -61,12 +65,11 @@ class OpenIDService {
     }
   }
 
-  // ==========================================
-  // 2. DESKTOP OAUTH POPUP
-  // ==========================================
+  // Mở trình duyệt OAuth trên desktop và nhận JWT qua deep link
   Future<String?> _handleDesktopOAuth(String provider) async {
     try {
-      final String url = 'http://localhost:5034/api/auth/desktop-login/$provider';
+      final String url =
+          'http://localhost:5034/api/auth/desktop-login/$provider';
 
       final String result = await FlutterWebAuth2.authenticate(
         url: url,
@@ -94,9 +97,7 @@ class OpenIDService {
     }
   }
 
-  // ==========================================
-  // 3. ĐĂNG XUẤT
-  // ==========================================
+  // Đăng xuất Google trên các nền tảng có hỗ trợ Google Sign-In trực tiếp
   Future<void> signOut() async {
     if (_isDesktop) {
       return;

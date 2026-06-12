@@ -70,6 +70,7 @@ class _CallScreenState extends State<CallScreen>
     }
   }
 
+  // Khởi tạo camera, micro và bắt đầu xử lý WebRTC
   Future<void> _startHardwareAndCall() async {
     if (_isEnding || _controller.isClosed) return;
 
@@ -86,6 +87,7 @@ class _CallScreenState extends State<CallScreen>
     }
   }
 
+  // Chấp nhận cuộc gọi đến từ người khác
   void _acceptCallFromRemote() {
     if (_isEnding || _isAccepted) return;
 
@@ -96,6 +98,7 @@ class _CallScreenState extends State<CallScreen>
     unawaited(_startHardwareAndCall());
   }
 
+  // Kết thúc cuộc gọi và đóng màn hình call
   Future<void> _endCall({bool notifyRemote = true}) async {
     if (_isEnding) return;
 
@@ -119,7 +122,7 @@ class _CallScreenState extends State<CallScreen>
   void dispose() {
     _rippleController.dispose();
 
-    // Không await trong dispose. Dùng unawaited để tránh block UI thread desktop.
+    // Giải phóng camera, micro và renderer sau khi thoát màn hình gọi
     unawaited(_controller.disposeHardware());
 
     super.dispose();
@@ -314,6 +317,7 @@ class _CallScreenState extends State<CallScreen>
     );
   }
 
+  // Tạo nút điều khiển cuộc gọi như nhận, tắt, mute hoặc tắt camera
   Widget _buildControlButton({
     required IconData icon,
     required Color color,

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class ThemeController extends ChangeNotifier {
-  // Mặc định là chế độ Sáng và màu Tím (#8470FF)
+  // Màu mac định và chế độ sáng tối mặc định
   ThemeMode themeMode = ThemeMode.light;
   Color primaryColor = const Color(0xFF8470FF);
 

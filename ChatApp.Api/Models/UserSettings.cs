@@ -1,6 +1,5 @@
 namespace ChatApp.Api.Models
 {
-    // Đại diện cho cục JSON trong bảng Users
     public class UserSettings
     {
         public string Theme { get; set; } = "light";
